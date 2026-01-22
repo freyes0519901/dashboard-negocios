@@ -92,56 +92,80 @@ function ProspectoCard({ prospecto, onNotificar, isLoading }) {
 }
 
 // ============================================
-// 📊 COMPONENTE REPORTES
+// 📊 COMPONENTE REPORTES - MEJORADO
 // ============================================
 function ReportesPanel() {
   const [periodo, setPeriodo] = useState('hoy');
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [vistaDetalle, setVistaDetalle] = useState('resumen'); // 'resumen', 'productos', 'horarios'
 
-  // Datos demo (en producción vendrán de la API)
+  // Datos demo mejorados
   const datosDemo = {
     hoy: {
       totalVentas: 127500,
       cantidadPedidos: 18,
       ticketPromedio: 7083,
       productosMasVendidos: [
-        { nombre: 'Hamburguesa Doble', cantidad: 12, emoji: '🍔' },
-        { nombre: 'Sándwich de Pollo', cantidad: 8, emoji: '🥪' },
-        { nombre: 'Papas Fritas', cantidad: 15, emoji: '🍟' },
-        { nombre: 'Bebida 500ml', cantidad: 14, emoji: '🥤' },
-        { nombre: 'Sándwich de Carne', cantidad: 5, emoji: '🥩' },
+        { nombre: 'Hamburguesa Doble', cantidad: 12, emoji: '🍔', ingresos: 42000 },
+        { nombre: 'Sándwich de Pollo', cantidad: 8, emoji: '🥪', ingresos: 28000 },
+        { nombre: 'Papas Fritas', cantidad: 15, emoji: '🍟', ingresos: 22500 },
+        { nombre: 'Bebida 500ml', cantidad: 14, emoji: '🥤', ingresos: 14000 },
+        { nombre: 'Sándwich de Carne', cantidad: 5, emoji: '🥩', ingresos: 21000 },
       ],
       metodoPago: { flow: 65, efectivo: 35 },
-      estadoPedidos: { entregados: 15, preparando: 2, listos: 1 }
+      estadoPedidos: { entregados: 15, preparando: 2, listos: 1 },
+      horaPico: '13:00 - 14:00',
+      comparacionAyer: 8.5, // % de cambio vs ayer
+      ventasPorHora: [
+        { hora: '11:00', ventas: 3 },
+        { hora: '12:00', ventas: 5 },
+        { hora: '13:00', ventas: 7 },
+        { hora: '14:00', ventas: 3 },
+      ]
     },
     semana: {
       totalVentas: 892500,
       cantidadPedidos: 126,
       ticketPromedio: 7083,
       productosMasVendidos: [
-        { nombre: 'Hamburguesa Doble', cantidad: 84, emoji: '🍔' },
-        { nombre: 'Sándwich de Pollo', cantidad: 56, emoji: '🥪' },
-        { nombre: 'Papas Fritas', cantidad: 105, emoji: '🍟' },
-        { nombre: 'Bebida 500ml', cantidad: 98, emoji: '🥤' },
-        { nombre: 'Sándwich de Carne', cantidad: 35, emoji: '🥩' },
+        { nombre: 'Hamburguesa Doble', cantidad: 84, emoji: '🍔', ingresos: 294000 },
+        { nombre: 'Sándwich de Pollo', cantidad: 56, emoji: '🥪', ingresos: 196000 },
+        { nombre: 'Papas Fritas', cantidad: 105, emoji: '🍟', ingresos: 157500 },
+        { nombre: 'Bebida 500ml', cantidad: 98, emoji: '🥤', ingresos: 98000 },
+        { nombre: 'Sándwich de Carne', cantidad: 35, emoji: '🥩', ingresos: 147000 },
       ],
       metodoPago: { flow: 58, efectivo: 42 },
-      estadoPedidos: { entregados: 120, preparando: 4, listos: 2 }
+      estadoPedidos: { entregados: 120, preparando: 4, listos: 2 },
+      horaPico: '13:00 - 14:00',
+      comparacionSemanaAnterior: 12.3,
+      mejorDia: 'Viernes',
+      ventasPorDia: [
+        { dia: 'Lun', ventas: 15 },
+        { dia: 'Mar', ventas: 18 },
+        { dia: 'Mié', ventas: 20 },
+        { dia: 'Jue', ventas: 22 },
+        { dia: 'Vie', ventas: 28 },
+        { dia: 'Sáb', ventas: 23 },
+      ]
     },
     mes: {
       totalVentas: 3850000,
       cantidadPedidos: 543,
       ticketPromedio: 7090,
       productosMasVendidos: [
-        { nombre: 'Hamburguesa Doble', cantidad: 362, emoji: '🍔' },
-        { nombre: 'Sándwich de Pollo', cantidad: 241, emoji: '🥪' },
-        { nombre: 'Papas Fritas', cantidad: 452, emoji: '🍟' },
-        { nombre: 'Bebida 500ml', cantidad: 421, emoji: '🥤' },
-        { nombre: 'Sándwich de Carne', cantidad: 151, emoji: '🥩' },
+        { nombre: 'Hamburguesa Doble', cantidad: 362, emoji: '🍔', ingresos: 1267000 },
+        { nombre: 'Sándwich de Pollo', cantidad: 241, emoji: '🥪', ingresos: 843500 },
+        { nombre: 'Papas Fritas', cantidad: 452, emoji: '🍟', ingresos: 678000 },
+        { nombre: 'Bebida 500ml', cantidad: 421, emoji: '🥤', ingresos: 421000 },
+        { nombre: 'Sándwich de Carne', cantidad: 151, emoji: '🥩', ingresos: 633500 },
       ],
       metodoPago: { flow: 62, efectivo: 38 },
-      estadoPedidos: { entregados: 538, preparando: 3, listos: 2 }
+      estadoPedidos: { entregados: 538, preparando: 3, listos: 2 },
+      horaPico: '13:00 - 14:00',
+      comparacionMesAnterior: 15.7,
+      mejorSemana: 'Semana 3',
+      crecimiento: 15.7
     }
   };
 
@@ -209,39 +233,166 @@ function ReportesPanel() {
         ))}
       </div>
 
-      {/* KPIs principales */}
+      {/* KPIs principales con comparación */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white">
           <p className="text-white/80 text-xs font-medium">💰 Total Ventas</p>
           <p className="text-2xl font-bold mt-1">{formatearPrecio(datos.totalVentas)}</p>
+          {datos.comparacionAyer && (
+            <p className="text-xs text-white/80 mt-1">
+              {datos.comparacionAyer > 0 ? '📈' : '📉'} {Math.abs(datos.comparacionAyer).toFixed(1)}% vs ayer
+            </p>
+          )}
+          {datos.comparacionSemanaAnterior && (
+            <p className="text-xs text-white/80 mt-1">
+              {datos.comparacionSemanaAnterior > 0 ? '📈' : '📉'} {Math.abs(datos.comparacionSemanaAnterior).toFixed(1)}% vs semana anterior
+            </p>
+          )}
+          {datos.comparacionMesAnterior && (
+            <p className="text-xs text-white/80 mt-1">
+              {datos.comparacionMesAnterior > 0 ? '📈' : '📉'} {Math.abs(datos.comparacionMesAnterior).toFixed(1)}% vs mes anterior
+            </p>
+          )}
         </div>
         <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-4 text-white">
           <p className="text-white/80 text-xs font-medium">📦 Pedidos</p>
           <p className="text-2xl font-bold mt-1">{datos.cantidadPedidos}</p>
+          {datos.mejorDia && (
+            <p className="text-xs text-white/80 mt-1">🏆 Mejor día: {datos.mejorDia}</p>
+          )}
+          {datos.mejorSemana && (
+            <p className="text-xs text-white/80 mt-1">🏆 Mejor: {datos.mejorSemana}</p>
+          )}
         </div>
         <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl p-4 text-white">
           <p className="text-white/80 text-xs font-medium">🧾 Ticket Promedio</p>
           <p className="text-2xl font-bold mt-1">{formatearPrecio(datos.ticketPromedio)}</p>
+          <p className="text-xs text-white/80 mt-1">⏰ {datos.horaPico}</p>
         </div>
         <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white">
           <p className="text-white/80 text-xs font-medium">🏆 Top Producto</p>
           <p className="text-xl font-bold mt-1">{datos.productosMasVendidos[0].emoji} {datos.productosMasVendidos[0].cantidad}</p>
+          <p className="text-xs text-white/80 mt-1 truncate">{datos.productosMasVendidos[0].nombre}</p>
         </div>
       </div>
 
-      {/* Productos más vendidos */}
-      <div className="bg-white/10 rounded-2xl p-4">
-        <h3 className="text-white font-bold mb-3">🏆 Más Vendidos</h3>
-        <div className="space-y-2">
-          {datos.productosMasVendidos.slice(0, 5).map((prod, index) => {
-            const porcentaje = (prod.cantidad / datos.productosMasVendidos[0].cantidad) * 100;
-            return (
-              <div key={prod.nombre} className="flex items-center gap-3">
-                <span className="text-xl w-8">{prod.emoji}</span>
-                <div className="flex-1">
-                  <div className="flex justify-between text-white text-sm mb-1">
-                    <span>{prod.nombre}</span>
-                    <span className="font-bold">{prod.cantidad}</span>
+      {/* Tabs para vistas detalladas */}
+      <div className="flex bg-white/10 rounded-xl p-1">
+        {[
+          { key: 'resumen', label: '📊 Resumen', icon: '📊' },
+          { key: 'productos', label: '🍔 Productos', icon: '🍔' },
+          { key: 'horarios', label: '⏰ Horarios', icon: '⏰' }
+        ].map((v) => (
+          <button
+            key={v.key}
+            onClick={() => setVistaDetalle(v.key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+              vistaDetalle === v.key
+                ? 'bg-white text-orange-600'
+                : 'text-white/70 hover:text-white'
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Vista Resumen */}
+      {vistaDetalle === 'resumen' && (
+        <>
+          {/* Métodos de pago */}
+          <div className="bg-white/10 rounded-2xl p-4">
+            <h3 className="text-white font-bold mb-3">💳 Métodos de Pago</h3>
+            <div className="flex gap-4">
+              <div className="flex-1 text-center">
+                <div className="relative w-20 h-20 mx-auto mb-2">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle cx="40" cy="40" r="32" stroke="rgba(255,255,255,0.2)" strokeWidth="8" fill="none" />
+                    <circle 
+                      cx="40" cy="40" r="32" 
+                      stroke="#3B82F6" 
+                      strokeWidth="8" 
+                      fill="none"
+                      strokeDasharray={`${datos.metodoPago.flow * 2.01} 201`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-white font-bold">{datos.metodoPago.flow}%</span>
+                  </div>
+                </div>
+                <p className="text-white/70 text-sm">💳 Flow</p>
+                <p className="text-white text-xs">{formatearPrecio(datos.totalVentas * datos.metodoPago.flow / 100)}</p>
+              </div>
+              <div className="flex-1 text-center">
+                <div className="relative w-20 h-20 mx-auto mb-2">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle cx="40" cy="40" r="32" stroke="rgba(255,255,255,0.2)" strokeWidth="8" fill="none" />
+                    <circle 
+                      cx="40" cy="40" r="32" 
+                      stroke="#22C55E" 
+                      strokeWidth="8" 
+                      fill="none"
+                      strokeDasharray={`${datos.metodoPago.efectivo * 2.01} 201`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-white font-bold">{datos.metodoPago.efectivo}%</span>
+                  </div>
+                </div>
+                <p className="text-white/70 text-sm">💵 Efectivo</p>
+                <p className="text-white text-xs">{formatearPrecio(datos.totalVentas * datos.metodoPago.efectivo / 100)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Estado de pedidos */}
+          <div className="bg-white/10 rounded-2xl p-4">
+            <h3 className="text-white font-bold mb-3">📊 Estado de Pedidos</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-white/80 text-sm">✅ Entregados</span>
+                <span className="text-white font-bold">{datos.estadoPedidos.entregados}</span>
+              </div>
+              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-full bg-green-500 rounded-full" 
+                     style={{ width: `${(datos.estadoPedidos.entregados / datos.cantidadPedidos) * 100}%` }}></div>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-white/80 text-sm">👨‍🍳 Preparando</span>
+                <span className="text-white font-bold">{datos.estadoPedidos.preparando}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-white/80 text-sm">⏰ Listos</span>
+                <span className="text-white font-bold">{datos.estadoPedidos.listos}</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Vista Productos */}
+      {vistaDetalle === 'productos' && (
+        <div className="bg-white/10 rounded-2xl p-4">
+          <h3 className="text-white font-bold mb-3">🏆 Ranking de Productos</h3>
+          <div className="space-y-3">
+            {datos.productosMasVendidos.map((prod, index) => {
+              const porcentaje = (prod.cantidad / datos.productosMasVendidos[0].cantidad) * 100;
+              const medallas = ['🥇', '🥈', '🥉'];
+              return (
+                <div key={prod.nombre} className="bg-white/10 rounded-xl p-3">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">{medallas[index] || '🏅'}</span>
+                    <span className="text-xl">{prod.emoji}</span>
+                    <div className="flex-1">
+                      <div className="flex justify-between text-white text-sm mb-1">
+                        <span className="font-semibold">{prod.nombre}</span>
+                        <span className="font-bold">{prod.cantidad} un.</span>
+                      </div>
+                      <div className="flex justify-between text-white/70 text-xs">
+                        <span>Ingresos</span>
+                        <span className="font-semibold">{formatearPrecio(prod.ingresos)}</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="h-2 bg-white/20 rounded-full overflow-hidden">
                     <div 
@@ -254,72 +405,132 @@ function ReportesPanel() {
                     ></div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Métodos de pago */}
-      <div className="bg-white/10 rounded-2xl p-4">
-        <h3 className="text-white font-bold mb-3">💳 Métodos de Pago</h3>
-        <div className="flex gap-4">
-          <div className="flex-1 text-center">
-            <div className="relative w-20 h-20 mx-auto mb-2">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="40" cy="40" r="32" stroke="rgba(255,255,255,0.2)" strokeWidth="8" fill="none" />
-                <circle 
-                  cx="40" cy="40" r="32" 
-                  stroke="#3B82F6" 
-                  strokeWidth="8" 
-                  fill="none"
-                  strokeDasharray={`${datos.metodoPago.flow * 2.01} 201`}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-white font-bold">{datos.metodoPago.flow}%</span>
+              );
+            })}
+          </div>
+          
+          {/* Análisis de productos */}
+          <div className="mt-4 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 border border-yellow-400/30 rounded-xl p-3">
+            <div className="flex items-start gap-2">
+              <span className="text-xl">💡</span>
+              <div>
+                <p className="text-white font-medium text-sm">Recomendación</p>
+                <p className="text-white/70 text-xs mt-1">
+                  {datos.productosMasVendidos[0].nombre} representa el {
+                    ((datos.productosMasVendidos[0].ingresos / datos.totalVentas) * 100).toFixed(1)
+                  }% de tus ingresos. Considera crear combos con este producto.
+                </p>
               </div>
             </div>
-            <p className="text-white/70 text-sm">💳 Flow</p>
-          </div>
-          <div className="flex-1 text-center">
-            <div className="relative w-20 h-20 mx-auto mb-2">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="40" cy="40" r="32" stroke="rgba(255,255,255,0.2)" strokeWidth="8" fill="none" />
-                <circle 
-                  cx="40" cy="40" r="32" 
-                  stroke="#22C55E" 
-                  strokeWidth="8" 
-                  fill="none"
-                  strokeDasharray={`${datos.metodoPago.efectivo * 2.01} 201`}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-white font-bold">{datos.metodoPago.efectivo}%</span>
-              </div>
-            </div>
-            <p className="text-white/70 text-sm">💵 Efectivo</p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Insight rápido */}
+      {/* Vista Horarios */}
+      {vistaDetalle === 'horarios' && (
+        <>
+          {periodo === 'hoy' && datos.ventasPorHora && (
+            <div className="bg-white/10 rounded-2xl p-4">
+              <h3 className="text-white font-bold mb-3">⏰ Ventas por Hora</h3>
+              <div className="space-y-2">
+                {datos.ventasPorHora.map((item) => {
+                  const maxVentas = Math.max(...datos.ventasPorHora.map(v => v.ventas));
+                  const porcentaje = (item.ventas / maxVentas) * 100;
+                  return (
+                    <div key={item.hora}>
+                      <div className="flex justify-between text-white text-sm mb-1">
+                        <span>{item.hora}</span>
+                        <span className="font-bold">{item.ventas} pedidos</span>
+                      </div>
+                      <div className="h-3 bg-white/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full"
+                          style={{ width: `${porcentaje}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {periodo === 'semana' && datos.ventasPorDia && (
+            <div className="bg-white/10 rounded-2xl p-4">
+              <h3 className="text-white font-bold mb-3">📅 Ventas por Día</h3>
+              <div className="flex justify-between items-end gap-2 h-40">
+                {datos.ventasPorDia.map((item) => {
+                  const maxVentas = Math.max(...datos.ventasPorDia.map(v => v.ventas));
+                  const altura = (item.ventas / maxVentas) * 100;
+                  return (
+                    <div key={item.dia} className="flex-1 flex flex-col items-center gap-2">
+                      <div className="text-white text-xs font-bold">{item.ventas}</div>
+                      <div 
+                        className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t-lg"
+                        style={{ height: `${altura}%` }}
+                      ></div>
+                      <div className="text-white/70 text-xs">{item.dia}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white/10 rounded-2xl p-4">
+            <h3 className="text-white font-bold mb-3">🕐 Hora Pico</h3>
+            <div className="text-center py-4">
+              <div className="text-4xl mb-2">⏰</div>
+              <div className="text-white text-2xl font-bold">{datos.horaPico}</div>
+              <p className="text-white/70 text-sm mt-2">Período de mayor actividad</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-purple-400/20 to-pink-400/20 border border-purple-400/30 rounded-xl p-3">
+            <div className="flex items-start gap-2">
+              <span className="text-xl">📍</span>
+              <div>
+                <p className="text-white font-medium text-sm">Tip de Gestión</p>
+                <p className="text-white/70 text-xs mt-1">
+                  Prepara más stock antes de {datos.horaPico.split(' - ')[0]} para optimizar el servicio en hora pico.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Insight con IA (simulado) */}
       <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 border border-yellow-400/30 rounded-2xl p-4">
         <div className="flex items-start gap-3">
-          <span className="text-2xl">💡</span>
+          <span className="text-2xl">🤖</span>
           <div>
-            <p className="text-white font-medium">Análisis Rápido</p>
+            <p className="text-white font-medium">Análisis Inteligente</p>
             <p className="text-white/70 text-sm mt-1">
-              La Hamburguesa Doble es tu producto estrella. 
-              {datos.metodoPago.flow > 50 ? ' La mayoría prefiere pagar con Flow.' : ' Muchos clientes prefieren efectivo.'}
+              {periodo === 'hoy' && 'Vas 8.5% mejor que ayer. Si mantienes este ritmo, superarás tu meta mensual.'}
+              {periodo === 'semana' && 'Crecimiento del 12.3% vs semana anterior. Los viernes son tu mejor día - considera promociones especiales.'}
+              {periodo === 'mes' && 'Crecimiento del 15.7% vs mes anterior. Tu ticket promedio aumentó - los clientes gastan más por pedido.'}
             </p>
+            <div className="flex gap-2 mt-3">
+              <button className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-white text-xs font-medium transition-all">
+                📊 Ver Proyección
+              </button>
+              <button className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-white text-xs font-medium transition-all">
+                💡 Más Insights
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Próximamente */}
-      <div className="text-center text-white/50 text-xs py-2">
-        🚀 Próximamente: Análisis con IA • Predicciones • Alertas
+      <div className="text-center space-y-2">
+        <div className="flex justify-center gap-4 text-white/40 text-xs">
+          <span>🔮 Predicciones IA</span>
+          <span>📱 Exportar PDF</span>
+          <span>📧 Reportes Email</span>
+        </div>
+        <div className="text-white/30 text-xs">Próximamente en tu dashboard</div>
       </div>
     </div>
   );
@@ -597,7 +808,7 @@ export default function CarritoDashboard() {
           </div>
         </div>
 
-        {/* Selector de Vista - AHORA CON 3 PESTAÑAS */}
+        {/* Selector de Vista - 3 PESTAÑAS */}
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setVista('pedidos')}
