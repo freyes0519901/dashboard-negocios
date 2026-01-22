@@ -29,7 +29,7 @@ export default function PagoExitoso() {
             <span className="text-gray-400">Te avisamos por WhatsApp</span>
           </div>
         </div>
-        <a
+        
           href="https://wa.me/56961472229"
           className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-2xl text-center text-lg"
         >
