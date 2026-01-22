@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 function PedidoCard({ pedido, onCambiarEstado, isLoading }) {
@@ -12,7 +13,7 @@ function PedidoCard({ pedido, onCambiarEstado, isLoading }) {
   const iconos = { 'Preparando': '👨‍🍳', 'Listo': '✅', 'Entregado': '📦' };
 
   return (
-    <div className={`bg-gradient-to-br ${colores[pedido.estado] || colores['Preparando']} rounded-2xl p-4 text-white shadow-lg animate-slide-up`}>
+    <div className={`bg-gradient-to-br ${colores[pedido.estado] || colores['Preparando']} rounded-2xl p-4 text-white shadow-lg`}>
       <div className="flex justify-between items-center mb-3">
         <span className="text-3xl font-bold">#{pedido.numero}</span>
         <span className="text-3xl">{iconos[pedido.estado]}</span>
@@ -53,6 +54,18 @@ export default function CarritoDashboard() {
   const [hora, setHora] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadingPedido, setLoadingPedido] = useState(null);
+  const [user, setUser] = useState(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const userData = localStorage.getItem('dashboard_user');
+    if (!userData) { router.push('/login'); return; }
+    try {
+      const parsed = JSON.parse(userData);
+      if (parsed.negocio !== 'carrito') { router.push('/login'); return; }
+      setUser(parsed);
+    } catch (e) { router.push('/login'); }
+  }, [router]);
 
   const cargarPedidos = useCallback(async () => {
     try {
@@ -88,60 +101,14 @@ export default function CarritoDashboard() {
     ? pedidos.filter(p => p.estado === 'Preparando' || p.estado === 'Listo')
     : filtro === 'todos' ? pedidos : pedidos.filter(p => p.estado === filtro);
 
+  const handleLogout = () => { localStorage.removeItem('dashboard_user'); router.push('/login'); };
+
+  if (!user) return <div className="min-h-screen flex items-center justify-center"><div className="text-6xl animate-bounce">🔐</div></div>;
+
   return (
     <div className="min-h-screen">
       <header className="bg-black/30 sticky top-0 z-50 border-b border-white/10 px-4 py-3">
         <div className="flex justify-between items-center max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <Link href="/" className="text-white/70 hover:text-white text-2xl">←</Link>
-            <h1 className="text-xl font-bold text-white">🥪 Sánguchez con Hambre</h1>
-          </div>
-          <div className="text-3xl font-mono font-bold text-white">{hora}</div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl p-4 text-white text-center">
-            <div className="text-4xl font-bold">{stats.preparando || 0}</div>
-            <div className="text-sm">👨‍🍳 Preparando</div>
-          </div>
-          <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white text-center">
-            <div className="text-4xl font-bold">{stats.listos || 0}</div>
-            <div className="text-sm">✅ Listos</div>
-          </div>
-          <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl p-4 text-white text-center">
-            <div className="text-4xl font-bold">{stats.entregados || 0}</div>
-            <div className="text-sm">📦 Entregados</div>
-          </div>
-          <div className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl p-4 text-white text-center">
-            <div className="text-2xl font-bold">${(stats.ventas_hoy || 0).toLocaleString('es-CL')}</div>
-            <div className="text-sm">💰 Ventas</div>
-          </div>
-        </div>
-
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-          {['activos', 'Preparando', 'Listo', 'Entregado', 'todos'].map(f => (
-            <button key={f} onClick={() => setFiltro(f)}
-              className={`px-4 py-2 rounded-full font-medium ${filtro === f ? 'bg-white text-orange-600' : 'bg-white/10 text-white'}`}>
-              {f === 'activos' ? '🔥 Activos' : f === 'todos' ? '📋 Todos' : f}
-            </button>
-          ))}
-        </div>
-
-        {isLoading ? (
-          <div className="text-center py-12"><div className="text-6xl animate-bounce">🥪</div></div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pedidosFiltrados.map(p => (
-              <PedidoCard key={p.fila} pedido={p} onCambiarEstado={cambiarEstado} isLoading={loadingPedido === p.fila} />
-            ))}
-          </div>
-        )}
-        {!isLoading && pedidosFiltrados.length === 0 && (
-          <div className="text-center text-white/50 py-12">📭 No hay pedidos</div>
-        )}
-      </main>
-    </div>
-  );
-}
+            <div>
