@@ -12,7 +12,7 @@ function CitaCard({ cita, onCambiarEstado, isLoading }) {
   const iconos = { 'Confirmada': '📅', 'Completada': '✅', 'No Asistió': '❌' };
 
   return (
-    <div className={`bg-gradient-to-br ${colores[cita.estado] || colores['Confirmada']} rounded-2xl p-4 text-white shadow-lg animate-slide-up`}>
+    <div className={`bg-gradient-to-br ${colores[cita.estado] || colores['Confirmada']} rounded-2xl p-4 text-white shadow-lg`}>
       <div className="flex justify-between items-center mb-3">
         <span className="text-2xl font-bold">⏰ {cita.hora}</span>
         <span className="text-3xl">{iconos[cita.estado]}</span>
@@ -54,22 +54,32 @@ export default function BarberiaDashboard() {
     try {
       const res = await fetch('https://freyes0519901.pythonanywhere.com/api/barberia/citas');
       const data = await res.json();
-      if (data.success) { setCitas(data.citas || []); setStats(data.stats || {}); }
-    } catch (e) { console.error(e); }
-    finally { setIsLoading(false); }
+      if (data.success) { 
+        setCitas(data.citas || []); 
+        setStats(data.stats || {}); 
+      }
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setIsLoading(false); 
+    }
   }, []);
 
   const cambiarEstado = async (fila, nuevoEstado) => {
     setLoadingCita(fila);
     try {
       await fetch(`https://freyes0519901.pythonanywhere.com/api/barberia/cita/${fila}/estado`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: nuevoEstado })
       });
       setCitas(prev => prev.map(c => c.fila === fila ? { ...c, estado: nuevoEstado } : c));
       setTimeout(cargarCitas, 500);
-    } catch (e) { console.error(e); }
-    finally { setLoadingCita(null); }
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setLoadingCita(null); 
+    }
   };
 
   useEffect(() => {
@@ -117,7 +127,7 @@ export default function BarberiaDashboard() {
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           {['Confirmada', 'Completada', 'No Asistió', 'todos'].map(f => (
             <button key={f} onClick={() => setFiltro(f)}
-              className={`px-4 py-2 rounded-full font-medium ${filtro === f ? 'bg-white text-purple-600' : 'bg-white/10 text-white'}`}>
+              className={`px-4 py-2 rounded-full font-medium whitespace-nowrap ${filtro === f ? 'bg-white text-purple-600' : 'bg-white/10 text-white'}`}>
               {f === 'Confirmada' ? '📅 Pendientes' : f === 'todos' ? '📋 Todas' : f}
             </button>
           ))}
@@ -128,4 +138,14 @@ export default function BarberiaDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {citasFiltradas.map(c => (
-              <CitaCard key
+              <CitaCard key={c.fila} cita={c} onCambiarEstado={cambiarEstado} isLoading={loadingCita === c.fila} />
+            ))}
+          </div>
+        )}
+        {!isLoading && citasFiltradas.length === 0 && (
+          <div className="text-center text-white/50 py-12">📭 No hay citas</div>
+        )}
+      </main>
+    </div>
+  );
+}
