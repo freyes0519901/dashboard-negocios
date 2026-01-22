@@ -121,4 +121,27 @@ export default function BarberiaDashboard() {
           <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white text-center">
             <div className="text-4xl font-bold">{stats.completadas || 0}</div><div className="text-sm">✅ Completadas</div>
           </div>
-          <div className="bg-gradient-to-br from-r
+          <div className="bg-gradient-to-br from-red-400 to-red-600 rounded-2xl p-4 text-white text-center">
+            <div className="text-4xl font-bold">{stats.no_asistio || 0}</div><div className="text-sm">❌ No asistió</div>
+          </div>
+          <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl p-4 text-white text-center">
+            <div className="text-4xl font-bold">{stats.total || 0}</div><div className="text-sm">📊 Total hoy</div>
+          </div>
+        </div>
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          {['Confirmada', 'Completada', 'No Asistió', 'todos'].map(f => (
+            <button key={f} onClick={() => setFiltro(f)} className={`px-4 py-2 rounded-full font-medium whitespace-nowrap ${filtro === f ? 'bg-white text-purple-600' : 'bg-white/10 text-white'}`}>
+              {f === 'Confirmada' ? '📅 Pendientes' : f === 'todos' ? '📋 Todas' : f}
+            </button>
+          ))}
+        </div>
+        {isLoading ? <div className="text-center py-12"><div className="text-6xl animate-bounce">💈</div></div> : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {citasFiltradas.map(c => <CitaCard key={c.fila} cita={c} onCambiarEstado={cambiarEstado} isLoading={loadingCita === c.fila} />)}
+          </div>
+        )}
+        {!isLoading && citasFiltradas.length === 0 && <div className="text-center text-white/50 py-12">📭 No hay citas</div>}
+      </main>
+    </div>
+  );
+}
