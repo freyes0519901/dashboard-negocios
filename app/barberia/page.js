@@ -3,16 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-const API_BASE = 'https://freyes0519901.pythonanywhere.com';
+// 🔒 GRADO INDUSTRIAL: Usa proxy interno, NO expone API Key
+const API_PROXY = '/api/backend';
 
-// 🔒 API Key desde variable de entorno de Vercel
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
-
-// 🔒 Helper para fetch con autenticación
-const fetchConAuth = async (url, options = {}) => {
+// 🔒 Fetch seguro via proxy (API Key oculta en servidor)
+const fetchSeguro = async (path, options = {}) => {
+  const url = `${API_PROXY}${path}`;
   const headers = {
     'Content-Type': 'application/json',
-    ...(API_KEY && { 'X-API-Key': API_KEY }),
     ...options.headers,
   };
   return fetch(url, { ...options, headers });
@@ -198,7 +196,7 @@ function ReportesPanel({ plan }) {
 
   const cargarPermisos = async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/export/permisos?plan=${plan}`);
+      const res = await fetchSeguro(`/api/barberia/export/permisos?plan=${plan}`);
       const data = await res.json();
       if (data.success) setPermisos(data);
     } catch (e) { console.error('Error permisos:', e); }
@@ -207,7 +205,7 @@ function ReportesPanel({ plan }) {
   const cargarReportes = async () => {
     setCargando(true);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/reportes?periodo=${periodo}`);
+      const res = await fetchSeguro(`/api/barberia/reportes?periodo=${periodo}`);
       const data = await res.json();
       if (data.success) setDatos(data);
     } catch (e) { console.error('Error reportes:', e); }
@@ -218,7 +216,7 @@ function ReportesPanel({ plan }) {
     if (!permisos?.exports_enabled) { alert('Exports no disponibles'); return; }
     setExportando('excel');
     try {
-      window.open(`${API_BASE}/api/barberia/export/excel?periodo=${periodo}&plan=${plan}&api_key=${API_KEY}`, '_blank');
+      window.open(`${API_PROXY}/api/barberia/export/excel?periodo=${periodo}&plan=${plan}`, '_blank');
     } catch (e) { alert('Error descargando Excel'); }
     finally { setTimeout(() => setExportando(null), 1000); }
   };
@@ -227,7 +225,7 @@ function ReportesPanel({ plan }) {
     if (!permisos?.exports_enabled) { alert('Exports no disponibles'); return; }
     setExportando('pdf');
     try {
-      window.open(`${API_BASE}/api/barberia/export/pdf?periodo=${periodo}&tipo=${tipo}&plan=${plan}&api_key=${API_KEY}`, '_blank');
+      window.open(`${API_PROXY}/api/barberia/export/pdf?periodo=${periodo}&tipo=${tipo}&plan=${plan}`, '_blank');
     } catch (e) { alert('Error descargando PDF'); }
     finally { setTimeout(() => setExportando(null), 1000); }
   };
@@ -296,7 +294,7 @@ function ReportesPanel({ plan }) {
 // ============================================
 // ⚙️ COMPONENTE CONFIG CON HORARIOS EDITABLES
 // ============================================
-function ConfigPanel({ config, negocio, apiBase, onConfigUpdate }) {
+function ConfigPanel({ config, negocio, onConfigUpdate }) {
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
@@ -371,7 +369,8 @@ function ConfigPanel({ config, negocio, apiBase, onConfigUpdate }) {
     try {
       const nuevoHorarioTexto = generarHorarioTexto();
       
-      const res = await fetchConAuth(`${apiBase}/api/${negocio}/config/horarios`, {
+      // 🔒 Usa proxy interno
+      const res = await fetchSeguro(`/api/${negocio}/config/horarios`, {
         method: 'POST',
         body: JSON.stringify({
           hora_apertura: horaApertura,
@@ -633,9 +632,10 @@ export default function BarberiaDashboard() {
     } catch (e) { router.push('/login'); }
   }, [router]);
 
+  // 🔒 Todas las llamadas usan fetchSeguro (proxy interno)
   const cargarConfig = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/config`);
+      const res = await fetchSeguro(`/api/barberia/config`);
       const data = await res.json();
       if (data.success) setConfig(data);
     } catch (e) { console.error('Error config:', e); }
@@ -643,7 +643,7 @@ export default function BarberiaDashboard() {
 
   const cargarStats = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/stats/rapidas`);
+      const res = await fetchSeguro(`/api/barberia/stats/rapidas`);
       const data = await res.json();
       if (data.success) setStats(data);
     } catch (e) { console.error('Error stats:', e); }
@@ -651,7 +651,7 @@ export default function BarberiaDashboard() {
 
   const cargarCitas = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/citas-db?fecha=${fechaSeleccionada}&estado=todos`);
+      const res = await fetchSeguro(`/api/barberia/citas-db?fecha=${fechaSeleccionada}&estado=todos`);
       const data = await res.json();
       if (data.success && data.citas) {
         const prevIds = new Set(previousCitasRef.current.map(c => c.id));
@@ -673,7 +673,7 @@ export default function BarberiaDashboard() {
 
   const cargarNoAsistieron = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/no-asistieron`);
+      const res = await fetchSeguro(`/api/barberia/no-asistieron`);
       const data = await res.json();
       if (data.success) setNoAsistieron(data.clientes || []);
     } catch (e) { console.error('Error no asistieron:', e); }
@@ -681,7 +681,7 @@ export default function BarberiaDashboard() {
 
   const cargarSinAgendar = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/sin-agendar`);
+      const res = await fetchSeguro(`/api/barberia/sin-agendar`);
       const data = await res.json();
       if (data.success) setSinAgendar(data.prospectos || []);
     } catch (e) { console.error('Error sin agendar:', e); }
@@ -689,7 +689,7 @@ export default function BarberiaDashboard() {
 
   const cargarVips = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/vips`);
+      const res = await fetchSeguro(`/api/barberia/vips`);
       const data = await res.json();
       if (data.success) setVips(data.clientes || []);
     } catch (e) { console.error('Error vips:', e); }
@@ -697,7 +697,7 @@ export default function BarberiaDashboard() {
 
   const cargarRecordatorios = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/recordatorios`);
+      const res = await fetchSeguro(`/api/barberia/recordatorios`);
       const data = await res.json();
       if (data.success) setRecordatorios(data.citas || []);
     } catch (e) { console.error('Error recordatorios:', e); }
@@ -739,7 +739,7 @@ export default function BarberiaDashboard() {
   const cambiarEstado = async (id, nuevoEstado) => {
     setLoadingCita(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/citas/estado`, {
+      const res = await fetchSeguro(`/api/barberia/citas/estado`, {
         method: 'POST',
         body: JSON.stringify({ id, estado: nuevoEstado })
       });
@@ -753,7 +753,7 @@ export default function BarberiaDashboard() {
   const completarNotificar = async (id) => {
     setLoadingCita(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/citas/notificar-completada`, {
+      const res = await fetchSeguro(`/api/barberia/citas/notificar-completada`, {
         method: 'POST',
         body: JSON.stringify({ id })
       });
@@ -767,7 +767,7 @@ export default function BarberiaDashboard() {
   const notificarNoAsistio = async (id) => {
     setLoadingNoAsistio(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/no-asistieron/${id}/notificar`, {
+      const res = await fetchSeguro(`/api/barberia/no-asistieron/${id}/notificar`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -780,7 +780,7 @@ export default function BarberiaDashboard() {
   const notificarSinAgendar = async (id) => {
     setLoadingSinAgendar(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/sin-agendar/${id}/notificar`, {
+      const res = await fetchSeguro(`/api/barberia/sin-agendar/${id}/notificar`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -792,7 +792,7 @@ export default function BarberiaDashboard() {
 
   const enviarPromoVip = async (id) => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/vips/${id}/promo`, {
+      const res = await fetchSeguro(`/api/barberia/vips/${id}/promo`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -803,7 +803,7 @@ export default function BarberiaDashboard() {
   const enviarRecordatorio = async (id) => {
     setLoadingRecordatorio(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/recordatorios/${id}/enviar`, {
+      const res = await fetchSeguro(`/api/barberia/recordatorios/${id}/enviar`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -817,7 +817,7 @@ export default function BarberiaDashboard() {
     if (!confirm('¿Enviar "¿Reagendamos?" a todos los que no asistieron?')) return;
     setRescatandoTodos(true);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/no-asistieron/rescatar-todos`, {
+      const res = await fetchSeguro(`/api/barberia/no-asistieron/rescatar-todos`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -830,7 +830,7 @@ export default function BarberiaDashboard() {
   const enviarTodosRecordatorios = async () => {
     if (!confirm('¿Enviar recordatorio a todas las citas de mañana?')) return;
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/barberia/recordatorios/enviar-todos`, {
+      const res = await fetchSeguro(`/api/barberia/recordatorios/enviar-todos`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -1046,7 +1046,6 @@ export default function BarberiaDashboard() {
           <ConfigPanel 
             config={config} 
             negocio="barberia" 
-            apiBase={API_BASE}
             onConfigUpdate={cargarConfig}
           />
         )}
