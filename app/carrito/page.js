@@ -3,16 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-const API_BASE = 'https://freyes0519901.pythonanywhere.com';
+// 🔒 GRADO INDUSTRIAL: Usa proxy interno, NO expone API Key
+const API_PROXY = '/api/backend';
 
-// 🔒 API Key desde variable de entorno de Vercel
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
-
-// 🔒 Helper para fetch con autenticación
-const fetchConAuth = async (url, options = {}) => {
+// 🔒 Fetch seguro via proxy (API Key oculta en servidor)
+const fetchSeguro = async (path, options = {}) => {
+  const url = `${API_PROXY}${path}`;
   const headers = {
     'Content-Type': 'application/json',
-    ...(API_KEY && { 'X-API-Key': API_KEY }),
     ...options.headers,
   };
   return fetch(url, { ...options, headers });
@@ -138,7 +136,7 @@ function ReportesPanel({ plan }) {
 
   const cargarPermisos = async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/export/permisos?plan=${plan}`);
+      const res = await fetchSeguro(`/api/carrito/export/permisos?plan=${plan}`);
       const data = await res.json();
       if (data.success) setPermisos(data);
     } catch (e) { console.error('Error permisos:', e); }
@@ -147,7 +145,7 @@ function ReportesPanel({ plan }) {
   const cargarReportes = async () => {
     setCargando(true);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/reportes?periodo=${periodo}`);
+      const res = await fetchSeguro(`/api/carrito/reportes?periodo=${periodo}`);
       const data = await res.json();
       if (data.success) setDatos(data);
     } catch (e) { console.error('Error reportes:', e); }
@@ -162,7 +160,7 @@ function ReportesPanel({ plan }) {
     }
     setExportando('excel');
     try {
-      window.open(`${API_BASE}/api/carrito/export/excel?periodo=${periodo}&plan=${plan}&api_key=${API_KEY}`, '_blank');
+      window.open(`${API_PROXY}/api/carrito/export/excel?periodo=${periodo}&plan=${plan}`, '_blank');
     } catch (e) { alert('Error descargando Excel'); }
     finally { setTimeout(() => setExportando(null), 1000); }
   };
@@ -173,7 +171,7 @@ function ReportesPanel({ plan }) {
     if (tipo === 'ia' && !permisos?.permisos?.pdf_ia) { alert(`Análisis IA requiere plan ENTERPRISE`); return; }
     setExportando('pdf');
     try {
-      window.open(`${API_BASE}/api/carrito/export/pdf?periodo=${periodo}&tipo=${tipo}&plan=${plan}&api_key=${API_KEY}`, '_blank');
+      window.open(`${API_PROXY}/api/carrito/export/pdf?periodo=${periodo}&tipo=${tipo}&plan=${plan}`, '_blank');
     } catch (e) { alert('Error descargando PDF'); }
     finally { setTimeout(() => setExportando(null), 1000); }
   };
@@ -287,7 +285,7 @@ function ReportesPanel({ plan }) {
 // ============================================
 // ⚙️ COMPONENTE CONFIG CON HORARIOS EDITABLES
 // ============================================
-function ConfigPanel({ config, negocio, apiBase, onConfigUpdate }) {
+function ConfigPanel({ config, negocio, onConfigUpdate }) {
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
@@ -363,7 +361,8 @@ function ConfigPanel({ config, negocio, apiBase, onConfigUpdate }) {
     try {
       const nuevoHorarioTexto = generarHorarioTexto();
       
-      const res = await fetchConAuth(`${apiBase}/api/${negocio}/config/horarios`, {
+      // 🔒 Usa proxy interno
+      const res = await fetchSeguro(`/api/${negocio}/config/horarios`, {
         method: 'POST',
         body: JSON.stringify({
           hora_apertura: horaApertura,
@@ -612,9 +611,10 @@ export default function CarritoDashboard() {
     } catch (e) { router.push('/login'); }
   }, [router]);
 
+  // 🔒 Todas las llamadas usan fetchSeguro (proxy interno)
   const cargarConfig = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/config`);
+      const res = await fetchSeguro(`/api/carrito/config`);
       const data = await res.json();
       if (data.success) setConfig(data);
     } catch (e) { console.error('Error config:', e); }
@@ -622,7 +622,7 @@ export default function CarritoDashboard() {
 
   const cargarStats = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/stats/rapidas`);
+      const res = await fetchSeguro(`/api/carrito/stats/rapidas`);
       const data = await res.json();
       if (data.success) setStats(data);
     } catch (e) { console.error('Error stats:', e); }
@@ -630,7 +630,7 @@ export default function CarritoDashboard() {
 
   const cargarPedidos = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/pedidos-db?estado=todos&limite=50`);
+      const res = await fetchSeguro(`/api/carrito/pedidos-db?estado=todos&limite=50`);
       const data = await res.json();
       if (data.success && data.pedidos) {
         const prevIds = new Set(previousPedidosRef.current.map(p => p.numero));
@@ -653,7 +653,7 @@ export default function CarritoDashboard() {
 
   const cargarFantasmas = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/fantasmas`);
+      const res = await fetchSeguro(`/api/carrito/fantasmas`);
       const data = await res.json();
       if (data.success) setFantasmas(data.fantasmas || []);
     } catch (e) { console.error('Error fantasmas:', e); }
@@ -661,7 +661,7 @@ export default function CarritoDashboard() {
 
   const cargarProspectos = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/prospectos-db`);
+      const res = await fetchSeguro(`/api/carrito/prospectos-db`);
       const data = await res.json();
       if (data.success) setProspectos(data.prospectos || []);
     } catch (e) { console.error('Error prospectos:', e); }
@@ -669,7 +669,7 @@ export default function CarritoDashboard() {
 
   const cargarAbandonados = useCallback(async () => {
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/abandonados`);
+      const res = await fetchSeguro(`/api/carrito/abandonados`);
       const data = await res.json();
       if (data.success) setAbandonados(data.abandonados || []);
     } catch (e) { console.error('Error abandonados:', e); }
@@ -708,7 +708,7 @@ export default function CarritoDashboard() {
   const marcarListo = async (numero) => {
     setLoadingPedido(numero);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/pedidos/notificar-listo`, {
+      const res = await fetchSeguro(`/api/carrito/pedidos/notificar-listo`, {
         method: 'POST',
         body: JSON.stringify({ numero })
       });
@@ -722,7 +722,7 @@ export default function CarritoDashboard() {
   const marcarEntregado = async (numero) => {
     setLoadingPedido(numero);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/pedidos/marcar-entregado`, {
+      const res = await fetchSeguro(`/api/carrito/pedidos/marcar-entregado`, {
         method: 'POST',
         body: JSON.stringify({ numero })
       });
@@ -736,7 +736,7 @@ export default function CarritoDashboard() {
   const notificarFantasma = async (id) => {
     setLoadingFantasma(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/fantasmas/${id}/notificar`, {
+      const res = await fetchSeguro(`/api/carrito/fantasmas/${id}/notificar`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -750,7 +750,7 @@ export default function CarritoDashboard() {
     if (!confirm('¿Notificar a todos los clientes con carritos fantasma?')) return;
     setNotificandoTodos(true);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/fantasmas/notificar-todos`, {
+      const res = await fetchSeguro(`/api/carrito/fantasmas/notificar-todos`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -763,7 +763,7 @@ export default function CarritoDashboard() {
   const notificarProspecto = async (id) => {
     setLoadingProspecto(id);
     try {
-      const res = await fetchConAuth(`${API_BASE}/api/carrito/prospectos/${id}/notificar`, {
+      const res = await fetchSeguro(`/api/carrito/prospectos/${id}/notificar`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -952,7 +952,6 @@ export default function CarritoDashboard() {
           <ConfigPanel 
             config={config} 
             negocio="carrito" 
-            apiBase={API_BASE}
             onConfigUpdate={cargarConfig}
           />
         )}
