@@ -1,94 +1,48 @@
-// 🔒 GRADO INDUSTRIAL: Proxy API Route - NEXT.JS 15 COMPATIBLE
-// Archivo: app/api/backend/[...path]/route.js
+// 🔒 API de Login con Cookie Segura
+// Archivo: app/api/auth/login/route.js
+
+import { cookies } from 'next/headers';
 
 const API_BASE = process.env.API_BASE_URL || 'https://freyes0519901.pythonanywhere.com';
-const API_KEY = process.env.API_KEY_BACKEND || '';
 
-export async function GET(request, context) {
-  return handleRequest(request, context, 'GET');
-}
-
-export async function POST(request, context) {
-  return handleRequest(request, context, 'POST');
-}
-
-export async function PUT(request, context) {
-  return handleRequest(request, context, 'PUT');
-}
-
-export async function DELETE(request, context) {
-  return handleRequest(request, context, 'DELETE');
-}
-
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
-}
-
-async function handleRequest(request, context, method) {
+export async function POST(request) {
   try {
-    if (!API_KEY) {
-      console.error('🚨 API_KEY_BACKEND no configurada en Vercel');
-      return Response.json(
-        { success: false, error: 'Servidor no configurado correctamente', code: 'SERVER_CONFIG_ERROR' },
-        { status: 500 }
-      );
-    }
-
-    // 🔒 FIX NEXT.JS 15: params es una Promise
-    const params = await context.params;
-    const pathSegments = params?.path || [];
-    const backendPath = '/' + pathSegments.join('/');
+    const body = await request.json();
     
-    const { searchParams } = new URL(request.url);
-    const queryString = searchParams.toString();
-    const fullUrl = `${API_BASE}${backendPath}${queryString ? '?' + queryString : ''}`;
+    // Llamar al backend real
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
     
-    console.log(`🔒 Proxy: ${method} ${fullUrl}`);
+    const data = await res.json();
     
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
-    };
-    
-    const fetchOptions = { method, headers };
-    
-    if (method === 'POST' || method === 'PUT') {
-      try {
-        const body = await request.json();
-        fetchOptions.body = JSON.stringify(body);
-      } catch {
-        // Sin body JSON
-      }
-    }
-    
-    const response = await fetch(fullUrl, fetchOptions);
-    
-    const contentType = response.headers.get('content-type');
-    if (contentType && !contentType.includes('application/json')) {
-      const blob = await response.blob();
-      return new Response(blob, {
-        status: response.status,
-        headers: {
-          'Content-Type': contentType,
-          'Content-Disposition': response.headers.get('content-disposition') || '',
-        },
+    if (data.success) {
+      // 🔒 Crear cookie segura de sesión
+      const cookieStore = await cookies();
+      const sessionData = JSON.stringify({
+        usuario: data.usuario,
+        negocio: data.negocio,
+        token: data.token,
+        timestamp: Date.now()
+      });
+      
+      cookieStore.set('dashboard_session', sessionData, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24, // 24 horas
+        path: '/'
       });
     }
     
-    const data = await response.json();
-    return Response.json(data, { status: response.status });
+    return Response.json(data, { status: res.status });
     
   } catch (error) {
-    console.error('🔒 Proxy error:', error);
+    console.error('Login error:', error);
     return Response.json(
-      { success: false, error: 'Error de conexión con el servidor', code: 'CONNECTION_ERROR' },
+      { success: false, error: 'Error de conexión' },
       { status: 500 }
     );
   }
