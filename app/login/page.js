@@ -1,5 +1,4 @@
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -16,7 +15,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('https://freyes0519901.pythonanywhere.com/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario, clave })
@@ -50,7 +49,6 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-white">Iniciar Sesión</h1>
           <p className="text-white/60 mt-2">Ingresa a tu panel de control</p>
         </div>
-
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-white/80 text-sm mb-2">Usuario</label>
@@ -63,7 +61,6 @@ export default function LoginPage() {
               required
             />
           </div>
-
           <div>
             <label className="block text-white/80 text-sm mb-2">Contraseña</label>
             <input
@@ -75,13 +72,11 @@ export default function LoginPage() {
               required
             />
           </div>
-
           {error && (
             <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-sm">
               ⚠️ {error}
             </div>
           )}
-
           <button
             type="submit"
             disabled={loading}
@@ -90,7 +85,6 @@ export default function LoginPage() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
-
         <p className="text-center text-white/40 text-sm mt-6">
           Dashboard Negocios v1.0
         </p>
