@@ -408,6 +408,252 @@ function ConfigPanel({ config, negocio, onConfigUpdate }) {
 }
 
 // ============================================
+// 🕐 PANEL DE HORARIOS DISPONIBLES
+// ============================================
+function HorariosPanel() {
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [disponibles, setDisponibles] = useState([]);
+  const [ocupados, setOcupados] = useState([]);
+  const [intervalo, setIntervalo] = useState(30);
+  const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState(null);
+
+  useEffect(() => {
+    cargarHorarios();
+    cargarIntervalo();
+  }, [fecha]);
+
+  const cargarHorarios = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchSeguro(`/api/barberia/horarios/disponibles?fecha=${fecha}`);
+      const data = await res.json();
+      if (data.success) {
+        setDisponibles(data.disponibles || []);
+        setOcupados(data.ocupados || []);
+      }
+    } catch (e) {
+      console.error('Error cargando horarios:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cargarIntervalo = async () => {
+    try {
+      const res = await fetchSeguro('/api/barberia/horarios/intervalo');
+      const data = await res.json();
+      if (data.success) {
+        setIntervalo(data.intervalo || 30);
+      }
+    } catch (e) {
+      console.error('Error cargando intervalo:', e);
+    }
+  };
+
+  const guardarIntervalo = async (nuevoIntervalo) => {
+    setGuardando(true);
+    try {
+      const res = await fetchSeguro('/api/barberia/horarios/intervalo', {
+        method: 'POST',
+        body: JSON.stringify({ intervalo: nuevoIntervalo })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIntervalo(nuevoIntervalo);
+        setMensaje({ tipo: 'success', texto: `✅ Intervalo actualizado a ${nuevoIntervalo} min` });
+        cargarHorarios();
+      } else {
+        setMensaje({ tipo: 'error', texto: data.error || 'Error al guardar' });
+      }
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión' });
+    } finally {
+      setGuardando(false);
+      setTimeout(() => setMensaje(null), 3000);
+    }
+  };
+
+  const bloquearHorario = async (hora) => {
+    try {
+      const res = await fetchSeguro('/api/barberia/horarios/bloquear', {
+        method: 'POST',
+        body: JSON.stringify({ fecha, hora, motivo: 'Bloqueado desde panel' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMensaje({ tipo: 'success', texto: `🔒 ${hora} bloqueado` });
+        cargarHorarios();
+      }
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'Error al bloquear' });
+    }
+    setTimeout(() => setMensaje(null), 3000);
+  };
+
+  const desbloquearHorario = async (hora) => {
+    try {
+      const res = await fetchSeguro('/api/barberia/horarios/desbloquear', {
+        method: 'POST',
+        body: JSON.stringify({ fecha, hora })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMensaje({ tipo: 'success', texto: `🔓 ${hora} desbloqueado` });
+        cargarHorarios();
+      }
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'Error al desbloquear' });
+    }
+    setTimeout(() => setMensaje(null), 3000);
+  };
+
+  const cambiarFecha = (dias) => {
+    const nuevaFecha = new Date(fecha);
+    nuevaFecha.setDate(nuevaFecha.getDate() + dias);
+    setFecha(nuevaFecha.toISOString().split('T')[0]);
+  };
+
+  const formatearFecha = (fechaStr) => {
+    const opciones = { weekday: 'long', day: 'numeric', month: 'long' };
+    return new Date(fechaStr + 'T12:00:00').toLocaleDateString('es-CL', opciones);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header con fecha */}
+      <div className="bg-white/10 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => cambiarFecha(-1)} className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl">
+            ◀️
+          </button>
+          <div className="text-center">
+            <p className="text-white/70 text-sm">📅 Fecha seleccionada</p>
+            <p className="text-white font-bold text-lg capitalize">{formatearFecha(fecha)}</p>
+          </div>
+          <button onClick={() => cambiarFecha(1)} className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl">
+            ▶️
+          </button>
+        </div>
+        
+        {/* Selector de fecha */}
+        <input 
+          type="date" 
+          value={fecha} 
+          onChange={(e) => setFecha(e.target.value)}
+          className="w-full bg-white/20 text-white border-0 rounded-xl p-3 text-center"
+        />
+      </div>
+
+      {/* Configuración de intervalo */}
+      <div className="bg-white/10 rounded-2xl p-4">
+        <h3 className="text-white font-bold mb-3">⏱️ Intervalo entre citas</h3>
+        <div className="flex gap-2">
+          {[15, 30, 60].map((mins) => (
+            <button
+              key={mins}
+              onClick={() => guardarIntervalo(mins)}
+              disabled={guardando}
+              className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                intervalo === mins 
+                  ? 'bg-white text-purple-600' 
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              {mins} min
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mensaje de estado */}
+      {mensaje && (
+        <div className={`p-3 rounded-xl text-center font-bold ${
+          mensaje.tipo === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
+        }`}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {/* Estadísticas rápidas */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white">
+          <p className="text-white/80 text-xs">✅ Disponibles</p>
+          <p className="text-3xl font-bold">{disponibles.length}</p>
+        </div>
+        <div className="bg-gradient-to-br from-red-400 to-red-500 rounded-2xl p-4 text-white">
+          <p className="text-white/80 text-xs">🔒 Ocupados</p>
+          <p className="text-3xl font-bold">{ocupados.length}</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center text-white py-10">
+          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p>Cargando horarios...</p>
+        </div>
+      ) : (
+        <>
+          {/* Horarios ocupados */}
+          {ocupados.length > 0 && (
+            <div className="bg-white/10 rounded-2xl p-4">
+              <h3 className="text-white font-bold mb-3">🔒 Citas del día</h3>
+              <div className="space-y-2">
+                {ocupados.map((cita, i) => (
+                  <div key={i} className="bg-white/10 rounded-xl p-3 flex justify-between items-center">
+                    <div>
+                      <span className="text-white font-bold">{cita.hora}</span>
+                      <span className="text-white/70 ml-2">{cita.nombre}</span>
+                      <span className="text-white/50 text-sm ml-2">({cita.servicio})</span>
+                    </div>
+                    {cita.nombre === 'Bloqueado manualmente' || cita.servicio === 'Horario Bloqueado' ? (
+                      <button 
+                        onClick={() => desbloquearHorario(cita.hora)}
+                        className="bg-green-500/20 hover:bg-green-500/40 text-green-300 px-3 py-1 rounded-lg text-sm"
+                      >
+                        🔓 Desbloquear
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Horarios disponibles */}
+          <div className="bg-white/10 rounded-2xl p-4">
+            <h3 className="text-white font-bold mb-3">✅ Horarios disponibles</h3>
+            {disponibles.length === 0 ? (
+              <p className="text-white/50 text-center py-4">No hay horarios disponibles para este día</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {disponibles.map((hora) => (
+                  <button
+                    key={hora}
+                    onClick={() => bloquearHorario(hora)}
+                    className="bg-white/20 hover:bg-red-500/30 text-white py-2 rounded-xl text-sm font-medium transition-all group"
+                    title="Click para bloquear"
+                  >
+                    {hora}
+                    <span className="hidden group-hover:inline ml-1">🔒</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-white/40 text-xs mt-3 text-center">💡 Click en un horario para bloquearlo</p>
+          </div>
+        </>
+      )}
+
+      <button onClick={cargarHorarios} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all">
+        🔄 Actualizar
+      </button>
+    </div>
+  );
+}
+
+// ============================================
 // ✂️ EDITOR DE SERVICIOS (equivalente a EditorMenu)
 // ============================================
 function EditorServicios({ onClose }) {
@@ -895,6 +1141,7 @@ export default function BarberiaDashboard() {
             { key: 'citas', icon: '📅', label: '' },
             { key: 'noasistieron', icon: '👻', label: '', badge: noAsistieronPendientes.length },
             { key: 'prospectos', icon: '📋', label: '', badge: prospectosPendientes.length },
+            { key: 'horarios', icon: '🕐', label: '' },
             { key: 'servicios', icon: '✂️', label: '' },
             { key: 'reportes', icon: '📊', label: '' },
             { key: 'config', icon: '⚙️', label: '' },
@@ -946,6 +1193,8 @@ export default function BarberiaDashboard() {
         )}
 
         {vista === 'servicios' && <EditorServicios onClose={() => setVista('citas')} />}
+
+        {vista === 'horarios' && <HorariosPanel />}
 
         {vista === 'reportes' && <ReportesPanel plan={config.plan || 'PRO'} />}
 
