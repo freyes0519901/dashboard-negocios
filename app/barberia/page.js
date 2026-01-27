@@ -515,42 +515,7 @@ function EditorServicios({ onClose }) {
     }
   };
 
-  const FormularioServicio = () => (
-    <div className="bg-white/10 rounded-xl p-4 mb-4">
-      <h3 className="text-white font-bold mb-3">{mostrarNuevo ? '➕ Nuevo' : '✏️ Editar'} Servicio</h3>
-      <div className="grid grid-cols-2 gap-3">
-        <input type="text" placeholder="Nombre del servicio" value={formNombre} onChange={(e) => setFormNombre(e.target.value)}
-          className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
-        <input type="number" placeholder="Precio" value={formPrecio} onChange={(e) => setFormPrecio(e.target.value)}
-          className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
-        <input type="number" placeholder="Duración (min)" value={formDuracion} onChange={(e) => setFormDuracion(e.target.value)}
-          className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
-        <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)}
-          className="bg-white/20 text-white rounded-lg px-3 py-2 outline-none">
-          <option value="corte" className="bg-gray-800">✂️ Corte</option>
-          <option value="barba" className="bg-gray-800">🧔 Barba</option>
-          <option value="combo" className="bg-gray-800">🔥 Combo</option>
-          <option value="otro" className="bg-gray-800">⭐ Otro</option>
-        </select>
-        <div className="flex gap-1 items-center">
-          {['✂️', '💇', '🧔', '🪒', '✨', '⭐', '🔥', '💎'].map(e => (
-            <button key={e} type="button" onClick={() => setFormEmoji(e)}
-              className={`w-7 h-7 rounded text-sm ${formEmoji === e ? 'bg-white text-black' : 'bg-white/20'}`}>{e}</button>
-          ))}
-        </div>
-        <textarea placeholder="Descripción" value={formDescripcion} onChange={(e) => setFormDescripcion(e.target.value)}
-          className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" rows={2} />
-      </div>
-      <div className="flex gap-2 mt-3">
-        <button onClick={guardarServicio} disabled={saving || !formNombre || !formPrecio}
-          className="flex-1 bg-green-500 text-white font-bold py-2 rounded-lg disabled:opacity-50">
-          {saving ? '⏳...' : '💾 Guardar'}
-        </button>
-        <button onClick={cancelarEdicion} className="px-4 bg-white/20 text-white rounded-lg">✕</button>
-      </div>
-    </div>
-  );
-
+  // ✅ FORMULARIO INLINE (no como función separada para evitar bug de foco)
   if (loading) return <div className="text-center text-white py-10"><div className="text-4xl mb-4 animate-spin">⏳</div><p>Cargando servicios...</p></div>;
 
   return (
@@ -566,7 +531,66 @@ function EditorServicios({ onClose }) {
         </button>
       )}
 
-      {(mostrarNuevo || editandoId) && <FormularioServicio />}
+      {/* ✅ FORMULARIO INLINE - Arreglado para que no pierda foco */}
+      {(mostrarNuevo || editandoId) && (
+        <div className="bg-white/10 rounded-xl p-4 mb-4">
+          <h3 className="text-white font-bold mb-3">{mostrarNuevo ? '➕ Nuevo' : '✏️ Editar'} Servicio</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <input 
+              type="text" 
+              placeholder="Nombre del servicio" 
+              value={formNombre} 
+              onChange={(e) => setFormNombre(e.target.value)}
+              autoFocus
+              className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" 
+            />
+            <input 
+              type="number" 
+              placeholder="Precio" 
+              value={formPrecio} 
+              onChange={(e) => setFormPrecio(e.target.value)}
+              className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" 
+            />
+            <input 
+              type="number" 
+              placeholder="Duración (min)" 
+              value={formDuracion} 
+              onChange={(e) => setFormDuracion(e.target.value)}
+              className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" 
+            />
+            <select 
+              value={formCategoria} 
+              onChange={(e) => setFormCategoria(e.target.value)}
+              className="bg-white/20 text-white rounded-lg px-3 py-2 outline-none"
+            >
+              <option value="corte" className="bg-gray-800">✂️ Corte</option>
+              <option value="barba" className="bg-gray-800">🧔 Barba</option>
+              <option value="combo" className="bg-gray-800">🔥 Combo</option>
+              <option value="otro" className="bg-gray-800">⭐ Otro</option>
+            </select>
+            <div className="flex gap-1 items-center">
+              {['✂️', '💇', '🧔', '🪒', '✨', '⭐', '🔥', '💎'].map(e => (
+                <button key={e} type="button" onClick={() => setFormEmoji(e)}
+                  className={`w-7 h-7 rounded text-sm ${formEmoji === e ? 'bg-white text-black' : 'bg-white/20'}`}>{e}</button>
+              ))}
+            </div>
+            <textarea 
+              placeholder="Descripción" 
+              value={formDescripcion} 
+              onChange={(e) => setFormDescripcion(e.target.value)}
+              className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" 
+              rows={2} 
+            />
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button onClick={guardarServicio} disabled={saving || !formNombre || !formPrecio}
+              className="flex-1 bg-green-500 text-white font-bold py-2 rounded-lg disabled:opacity-50">
+              {saving ? '⏳...' : '💾 Guardar'}
+            </button>
+            <button onClick={cancelarEdicion} className="px-4 bg-white/20 text-white rounded-lg">✕</button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {servicios.filter(s => s.id !== editandoId).map(serv => (
