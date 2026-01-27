@@ -901,22 +901,32 @@ export default function BarberiaDashboard() {
   useEffect(() => { setMounted(true); }, []);
 
   const playSound = useCallback(() => {
-    if (typeof window === 'undefined' || !audioContextRef.current) return;
+    if (typeof window === 'undefined') return;
     try {
+      // Crear AudioContext si no existe
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Resumir si está suspendido (autoplay policy de Chrome/Safari)
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
       const ctx = audioContextRef.current;
       [800, 1000, 1200].forEach((freq, i) => {
         setTimeout(() => {
           if (!audioContextRef.current) return;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = freq;
-          osc.type = 'sine';
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-          osc.start(ctx.currentTime);
-          osc.stop(ctx.currentTime + 0.3);
+          try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+          } catch (e) { /* ignore individual beep errors */ }
         }, i * 150);
       });
       if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
