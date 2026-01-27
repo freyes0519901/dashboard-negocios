@@ -467,14 +467,28 @@ function EditorServicios({ onClose }) {
     if (!formNombre || !formPrecio) return alert('Nombre y precio son requeridos');
     setSaving(true);
     try {
-      const servicio = { nombre: formNombre, precio: parseInt(formPrecio), duracion: parseInt(formDuracion) || 30, descripcion: formDescripcion, categoria: formCategoria, emoji: formEmoji };
+      // Generar key automáticamente desde el nombre
+      const key = formNombre.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Quitar acentos
+        .replace(/[^a-z0-9]+/g, '_') // Solo letras/números
+        .replace(/^_|_$/g, ''); // Quitar _ al inicio/final
+      
+      const servicio = { 
+        key: key, // Backend lo requiere
+        nombre: formNombre, 
+        precio: parseInt(formPrecio), 
+        duracion: parseInt(formDuracion) || 30, 
+        descripcion: formDescripcion, 
+        categoria: formCategoria, 
+        emoji: formEmoji 
+      };
       const isNew = mostrarNuevo;
       const url = isNew ? '/api/barberia/servicios' : `/api/barberia/servicios/${editandoId}`;
       const res = await fetchSeguro(url, { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(servicio) });
       const data = await res.json();
       if (data.success) { await cargarDatos(); cancelarEdicion(); }
       else alert(data.errores?.join(', ') || data.error || 'Error guardando');
-    } catch (e) { alert('Error de conexión'); }
+    } catch (e) { alert('Error de conexión: ' + e.message); }
     setSaving(false);
   };
 
