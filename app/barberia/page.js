@@ -1,963 +1,770 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 
-// 🔒 GRADO INDUSTRIAL: Usa proxy interno, NO expone API Key
-const API_PROXY = '/api/backend';
+// ============================================================================
+// 🔐 DASHBOARD ADMIN SaaS - CON MÉTRICAS AVANZADAS + GESTIÓN DE PLANES
+// ============================================================================
 
-// 🔒 Fetch seguro via proxy (API Key oculta en servidor)
-const fetchSeguro = async (path, options = {}) => {
-  const url = `${API_PROXY}${path}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-  return fetch(url, { ...options, headers });
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://freyes0519901.pythonanywhere.com';
+const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || '';
+
+// Planes disponibles - RESERVAS (Barberías, Dentistas, etc.)
+const PLANES_RESERVAS = [
+  { id: 'basico', nombre: 'Básico', precio: 29990, limite: 500 },
+  { id: 'pro', nombre: 'Pro', precio: 49990, limite: 2000 },
+  { id: 'pro_plus', nombre: 'Pro+', precio: 79990, limite: 7000 },
+  { id: 'enterprise', nombre: 'Enterprise', precio: 149990, limite: -1 }, // -1 = ilimitado
+];
+
+// Planes disponibles - PEDIDOS (Restaurantes, Food Trucks, etc.)
+const PLANES_PEDIDOS = [
+  { id: 'basico', nombre: 'Básico', precio: 39990, limite: 500 },
+  { id: 'pro', nombre: 'Pro', precio: 59990, limite: 2000 },
+  { id: 'pro_plus', nombre: 'Pro+', precio: 89990, limite: 7000 },
+  { id: 'enterprise', nombre: 'Enterprise', precio: 179990, limite: -1 },
+];
+
+// Función para obtener planes según tipo de negocio
+const obtenerPlanes = (tipoNegocio) => {
+  const tiposReservas = ['barberia', 'peluqueria', 'dentista', 'veterinaria', 'spa', 'kinesiologo', 'trainer'];
+  if (tiposReservas.some(t => tipoNegocio?.toLowerCase().includes(t))) {
+    return PLANES_RESERVAS;
+  }
+  return PLANES_PEDIDOS;
 };
 
-// ============================================
-// 💈 COMPONENTE CITA
-// ============================================
-function CitaCard({ cita, onCambiarEstado, onCompletarNotificar, isLoading }) {
+// Componente de KPI Card
+function KPICard({ titulo, valor, subtitulo, icono, color = 'blue', tendencia }) {
   const colores = {
-    'Confirmada': 'from-blue-400 to-blue-500',
-    'En Proceso': 'from-purple-400 to-purple-500',
-    'Completada': 'from-green-400 to-emerald-500',
-    'Cancelada': 'from-gray-400 to-gray-500',
-    'No Asistió': 'from-red-400 to-red-500',
+    blue: 'from-blue-500 to-blue-600',
+    green: 'from-green-500 to-green-600',
+    purple: 'from-purple-500 to-purple-600',
+    orange: 'from-orange-500 to-orange-600',
+    red: 'from-red-500 to-red-600',
+    cyan: 'from-cyan-500 to-cyan-600',
+    pink: 'from-pink-500 to-pink-600',
+    yellow: 'from-yellow-500 to-yellow-600'
   };
-  const iconos = { 'Confirmada': '✅', 'En Proceso': '✂️', 'Completada': '🎉', 'Cancelada': '❌', 'No Asistió': '😞' };
 
   return (
-    <div className={`bg-gradient-to-br ${colores[cita.estado] || colores['Confirmada']} rounded-2xl p-4 text-white shadow-lg`}>
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-2xl font-bold">⏰ {cita.hora}</span>
-        <span className="text-3xl">{iconos[cita.estado]}</span>
-      </div>
-      <div className="bg-white/20 rounded-xl p-3 mb-3">
-        <div className="flex items-center gap-2 mb-1">👤 <span className="font-semibold">{cita.nombre}</span></div>
-        <div className="flex items-center gap-2 text-sm">📞 {cita.telefono}</div>
-      </div>
-      <div className="bg-white/20 rounded-xl p-3 mb-3">
-        <div className="flex items-center gap-2">✂️ <span className="font-medium">{cita.servicio}</span></div>
-        <div className="flex justify-between mt-2">
-          <span className="text-lg font-bold">${(cita.precio || 0).toLocaleString('es-CL')}</span>
-          <span className="text-sm bg-white/20 px-2 py-1 rounded">{cita.duracion || 30} min</span>
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colores[color]} flex items-center justify-center text-white text-xl`}>
+          {icono}
         </div>
-      </div>
-      <div className="flex gap-2">
-        {cita.estado === 'Confirmada' && (
-          <>
-            <button onClick={() => onCambiarEstado(cita.id, 'En Proceso')} disabled={isLoading}
-              className="flex-1 bg-white text-purple-600 font-bold py-3 rounded-xl disabled:opacity-50 hover:scale-105 transition-transform">
-              {isLoading ? '⏳...' : '✂️ Iniciar'}
-            </button>
-            <button onClick={() => onCambiarEstado(cita.id, 'No Asistió')} disabled={isLoading}
-              className="bg-white/20 text-white font-bold py-3 px-4 rounded-xl disabled:opacity-50 hover:scale-105 transition-transform">
-              😞
-            </button>
-          </>
-        )}
-        {cita.estado === 'En Proceso' && (
-          <button onClick={() => onCompletarNotificar(cita.id)} disabled={isLoading}
-            className="flex-1 bg-white text-green-600 font-bold py-3 rounded-xl disabled:opacity-50 hover:scale-105 transition-transform">
-            {isLoading ? '⏳...' : '🎉 Completar + Notificar'}
-          </button>
-        )}
-        {['Completada', 'Cancelada', 'No Asistió'].includes(cita.estado) && (
-          <span className="flex-1 text-center py-3 bg-white/20 rounded-xl">
-            {cita.estado === 'Completada' ? '✓ Completada' : cita.estado === 'Cancelada' ? '✗ Cancelada' : '✗ No asistió'}
+        {tendencia !== undefined && tendencia !== null && (
+          <span className={`text-sm font-medium px-2 py-1 rounded-full ${tendencia > 0 ? 'bg-green-100 text-green-600' : tendencia < 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+            {tendencia > 0 ? '↑' : tendencia < 0 ? '↓' : '→'} {Math.abs(tendencia)}%
           </span>
         )}
       </div>
+      <h3 className="text-gray-500 text-sm font-medium">{titulo}</h3>
+      <p className="text-2xl font-bold text-gray-800 mt-1">{valor}</p>
+      {subtitulo && <p className="text-gray-400 text-xs mt-1">{subtitulo}</p>}
     </div>
   );
 }
 
-// ============================================
-// 😞 COMPONENTE NO ASISTIÓ
-// ============================================
-function NoAsistioCard({ cliente, onReagendar, isLoading }) {
-  return (
-    <div className="bg-gradient-to-br from-red-400 to-red-500 rounded-2xl p-4 text-white shadow-lg">
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-2xl">😞</span>
-        <span className="text-sm bg-white/20 px-2 py-1 rounded">{cliente.fecha}</span>
-      </div>
-      <div className="bg-white/20 rounded-xl p-3 mb-3">
-        <div className="flex items-center gap-2 mb-1">👤 <span className="font-semibold">{cliente.nombre}</span></div>
-        <div className="flex items-center gap-2 text-sm">📞 {cliente.telefono}</div>
-        <div className="flex items-center gap-2 text-sm mt-1">✂️ {cliente.servicio}</div>
-        <div className="flex items-center gap-2 text-sm">⏰ Cita era: {cliente.hora}</div>
-      </div>
-      {!cliente.notificado ? (
-        <button onClick={() => onReagendar(cliente.id)} disabled={isLoading}
-          className="w-full bg-white text-red-600 font-bold py-3 rounded-xl disabled:opacity-50 hover:scale-105 transition-transform">
-          {isLoading ? '⏳...' : '📲 "¿Reagendamos?"'}
-        </button>
-      ) : (
-        <span className="block text-center py-2 bg-white/20 rounded-xl text-sm">✅ Ya notificado</span>
-      )}
-    </div>
-  );
-}
-
-// ============================================
-// 📋 COMPONENTE SIN AGENDAR
-// ============================================
-function SinAgendarCard({ prospecto, onNotificar, isLoading }) {
-  return (
-    <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl p-4 text-white shadow-lg">
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-2xl">📋</span>
-        <span className={`px-2 py-1 rounded-full text-xs font-bold ${prospecto.notificado ? 'bg-green-500' : 'bg-white/30'}`}>
-          {prospecto.notificado ? '✅ Notificado' : '⏳ Pendiente'}
-        </span>
-      </div>
-      <div className="bg-white/20 rounded-xl p-3 mb-3">
-        <div className="flex items-center gap-2 mb-1">👤 <span className="font-semibold">{prospecto.nombre}</span></div>
-        <div className="flex items-center gap-2 text-sm">📞 {prospecto.telefono}</div>
-        <div className="flex items-center gap-2 text-sm mt-1">✂️ Interesado en: {prospecto.servicio}</div>
-      </div>
-      {!prospecto.notificado && (
-        <button onClick={() => onNotificar(prospecto.id)} disabled={isLoading}
-          className="w-full bg-white text-orange-600 font-bold py-2 rounded-xl disabled:opacity-50 hover:scale-105 transition-transform">
-          {isLoading ? '⏳...' : '📲 "¿Te agendamos?"'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ============================================
-// ⭐ COMPONENTE VIP
-// ============================================
-function VipCard({ cliente, onEnviarPromo }) {
-  return (
-    <div className="bg-gradient-to-br from-yellow-400 to-amber-500 rounded-2xl p-4 text-white shadow-lg">
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-2xl">⭐</span>
-        <span className="text-sm bg-white/20 px-2 py-1 rounded font-bold">{cliente.visitas} visitas</span>
-      </div>
-      <div className="bg-white/20 rounded-xl p-3 mb-3">
-        <div className="flex items-center gap-2 mb-1">👤 <span className="font-semibold">{cliente.nombre}</span></div>
-        <div className="flex items-center gap-2 text-sm">📞 {cliente.telefono}</div>
-        <div className="flex items-center gap-2 text-sm mt-1">✂️ Favorito: {cliente.servicio_favorito}</div>
-        <div className="flex items-center gap-2 text-sm">💰 Total gastado: ${(cliente.total_gastado || 0).toLocaleString('es-CL')}</div>
-      </div>
-      <button onClick={() => onEnviarPromo(cliente.id)}
-        className="w-full bg-white text-amber-600 font-bold py-2 rounded-xl hover:scale-105 transition-transform">
-        🎁 Enviar promo VIP
-      </button>
-    </div>
-  );
-}
-
-// ============================================
-// ⏰ COMPONENTE RECORDATORIO
-// ============================================
-function RecordatorioCard({ cita, onEnviarRecordatorio, isLoading }) {
-  return (
-    <div className="bg-gradient-to-br from-cyan-400 to-blue-500 rounded-2xl p-4 text-white shadow-lg">
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-2xl">⏰</span>
-        <span className="text-sm bg-white/20 px-2 py-1 rounded">{cita.fecha} - {cita.hora}</span>
-      </div>
-      <div className="bg-white/20 rounded-xl p-3 mb-3">
-        <div className="flex items-center gap-2 mb-1">👤 <span className="font-semibold">{cita.nombre}</span></div>
-        <div className="flex items-center gap-2 text-sm">📞 {cita.telefono}</div>
-        <div className="flex items-center gap-2 text-sm mt-1">✂️ {cita.servicio}</div>
-      </div>
-      {!cita.recordatorio_enviado ? (
-        <button onClick={() => onEnviarRecordatorio(cita.id)} disabled={isLoading}
-          className="w-full bg-white text-blue-600 font-bold py-2 rounded-xl disabled:opacity-50 hover:scale-105 transition-transform">
-          {isLoading ? '⏳...' : '📲 Enviar recordatorio'}
-        </button>
-      ) : (
-        <span className="block text-center py-2 bg-white/20 rounded-xl text-sm">✅ Recordatorio enviado</span>
-      )}
-    </div>
-  );
-}
-
-// ============================================
-// 📊 COMPONENTE REPORTES BARBERÍA
-// ============================================
-function ReportesPanel({ plan }) {
-  const [periodo, setPeriodo] = useState('hoy');
-  const [datos, setDatos] = useState(null);
-  const [cargando, setCargando] = useState(true);
-  const [exportando, setExportando] = useState(null);
-  const [permisos, setPermisos] = useState(null);
-
-  useEffect(() => { cargarPermisos(); }, [plan]);
-  useEffect(() => { cargarReportes(); }, [periodo]);
-
-  const cargarPermisos = async () => {
-    try {
-      const res = await fetchSeguro(`/api/barberia/export/permisos?plan=${plan}`);
-      const data = await res.json();
-      if (data.success) setPermisos(data);
-    } catch (e) { console.error('Error permisos:', e); }
+// Componente de Alerta
+function AlertaCard({ alerta }) {
+  const severidadConfig = {
+    critica: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: '🚨' },
+    alta: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', icon: '⚠️' },
+    media: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', icon: '📢' },
+    baja: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'ℹ️' }
   };
 
-  const cargarReportes = async () => {
-    setCargando(true);
-    try {
-      const res = await fetchSeguro(`/api/barberia/reportes?periodo=${periodo}`);
-      const data = await res.json();
-      if (data.success) setDatos(data);
-    } catch (e) { console.error('Error reportes:', e); }
-    finally { setCargando(false); }
-  };
-
-  const descargarExcel = async () => {
-    if (!permisos?.exports_enabled) { alert('Exports no disponibles'); return; }
-    setExportando('excel');
-    try { window.open(`${API_PROXY}/api/barberia/export/excel?periodo=${periodo}&plan=${plan}`, '_blank'); }
-    catch (e) { alert('Error descargando Excel'); }
-    finally { setTimeout(() => setExportando(null), 1000); }
-  };
-
-  const descargarPDF = async (tipo = 'basico') => {
-    if (!permisos?.exports_enabled) { alert('Exports no disponibles'); return; }
-    setExportando('pdf');
-    try { window.open(`${API_PROXY}/api/barberia/export/pdf?periodo=${periodo}&tipo=${tipo}&plan=${plan}`, '_blank'); }
-    catch (e) { alert('Error descargando PDF'); }
-    finally { setTimeout(() => setExportando(null), 1000); }
-  };
-
-  const formatearPrecio = (precio) => `$${(precio || 0).toLocaleString('es-CL')}`;
-
-  if (cargando) return (
-    <div className="text-center text-white py-10">
-      <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-      <p>Cargando reportes...</p>
-    </div>
-  );
+  const config = severidadConfig[alerta.severidad] || severidadConfig.media;
 
   return (
-    <div className="space-y-4">
-      <div className="flex bg-white/10 rounded-xl p-1">
-        {[{ key: 'hoy', label: '📅 Hoy' }, { key: 'semana', label: '📆 Semana' }, { key: 'mes', label: '🗓️ Mes' }].map((p) => (
-          <button key={p.key} onClick={() => setPeriodo(p.key)}
-            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${periodo === p.key ? 'bg-white text-indigo-600' : 'text-white/70 hover:text-white'}`}>
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      {datos && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">💰 Ingresos</p>
-            <p className="text-2xl font-bold">{formatearPrecio(datos.resumen?.ingresos)}</p>
-          </div>
-          <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">✂️ Citas</p>
-            <p className="text-2xl font-bold">{datos.resumen?.citas || 0}</p>
-          </div>
-          <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">🎫 Ticket Promedio</p>
-            <p className="text-2xl font-bold">{formatearPrecio(datos.resumen?.ticket_promedio)}</p>
-          </div>
-          <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">👥 Clientes</p>
-            <p className="text-2xl font-bold">{datos.resumen?.clientes_unicos || 0}</p>
-          </div>
-        </div>
-      )}
-
-      {datos?.top_servicios && datos.top_servicios.length > 0 && (
-        <div className="bg-white/10 rounded-2xl p-4">
-          <h3 className="text-white font-bold mb-3">🏆 Top Servicios</h3>
-          <div className="space-y-2">
-            {datos.top_servicios.map((serv, i) => (
-              <div key={i} className="flex justify-between items-center bg-white/10 rounded-lg p-2">
-                <span className="text-white">{['🥇', '🥈', '🥉', '🏅', '🏅'][i]} {serv.nombre}</span>
-                <span className="text-white font-bold">{serv.cantidad}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="bg-gradient-to-r from-indigo-500/30 to-purple-500/30 border border-white/20 rounded-2xl p-4">
-        <h3 className="text-white font-bold mb-3">📥 Exportar Reportes</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={descargarExcel} disabled={exportando === 'excel'}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl disabled:opacity-50 transition-all hover:scale-105">
-            {exportando === 'excel' ? '⏳...' : '📥 Excel'}
-          </button>
-          <button onClick={() => descargarPDF('basico')} disabled={exportando === 'pdf'}
-            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl disabled:opacity-50 transition-all hover:scale-105">
-            {exportando === 'pdf' ? '⏳...' : '📄 PDF'}
-          </button>
-        </div>
-        <div className="mt-3 text-center">
-          <span className="text-white/50 text-xs">Plan: <span className="font-bold text-white/70">{plan}</span></span>
+    <div className={`${config.bg} ${config.border} border rounded-xl p-4 mb-3`}>
+      <div className="flex items-start gap-3">
+        <span className="text-xl">{config.icon}</span>
+        <div className="flex-1">
+          <p className={`font-medium ${config.text}`}>{alerta.mensaje}</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {alerta.negocio} • Plan {alerta.plan}
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-// ============================================
-// ⚙️ COMPONENTE CONFIG CON HORARIOS EDITABLES
-// ============================================
-function ConfigPanel({ config, negocio, onConfigUpdate }) {
+// 🆕 COMPONENTE DE CLIENTE CON EDICIÓN DE PLAN
+function ClienteRow({ cliente, onCambiarPlan }) {
   const [editando, setEditando] = useState(false);
+  const [planSeleccionado, setPlanSeleccionado] = useState(cliente.plan?.toLowerCase().replace('+', '_plus') || 'basico');
   const [guardando, setGuardando] = useState(false);
-  const [mensaje, setMensaje] = useState(null);
-  
-  const [horaApertura, setHoraApertura] = useState(config.hora_apertura || 10);
-  const [horaCierre, setHoraCierre] = useState(config.hora_cierre || 20);
-  const [diasAtencion, setDiasAtencion] = useState(config.dias_atencion || ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']);
-  const [horarioTexto, setHorarioTexto] = useState(config.horario_texto || '');
-  
-  const DIAS_SEMANA = [
-    { id: 'lunes', label: 'Lun' }, { id: 'martes', label: 'Mar' }, { id: 'miercoles', label: 'Mié' },
-    { id: 'jueves', label: 'Jue' }, { id: 'viernes', label: 'Vie' }, { id: 'sabado', label: 'Sáb' }, { id: 'domingo', label: 'Dom' },
-  ];
-  
-  const HORAS = Array.from({ length: 24 }, (_, i) => ({ value: i, label: `${i.toString().padStart(2, '0')}:00` }));
-  
-  useEffect(() => {
-    setHoraApertura(config.hora_apertura ?? 10);
-    setHoraCierre(config.hora_cierre ?? 20);
-    setDiasAtencion(config.dias_atencion || ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']);
-    setHorarioTexto(config.horario_texto || '');
-  }, [config]);
-  
-  const toggleDia = (dia) => {
-    if (diasAtencion.includes(dia)) setDiasAtencion(diasAtencion.filter(d => d !== dia));
-    else setDiasAtencion([...diasAtencion, dia]);
+
+  // Determinar qué planes mostrar según el tipo de negocio
+  const planesDisponibles = obtenerPlanes(cliente.negocio);
+
+  const estadoConfig = {
+    activo: { bg: 'bg-green-100', text: 'text-green-700' },
+    pendiente: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+    vencido: { bg: 'bg-red-100', text: 'text-red-700' },
+    inactivo: { bg: 'bg-gray-100', text: 'text-gray-700' }
   };
-  
-  const generarHorarioTexto = () => {
-    const diasOrden = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-    const diasSeleccionados = diasOrden.filter(d => diasAtencion.includes(d));
-    if (diasSeleccionados.length === 0) return 'Sin horario definido';
-    const diasNombres = { 'lunes': 'Lunes', 'martes': 'Martes', 'miercoles': 'Miércoles', 'jueves': 'Jueves', 'viernes': 'Viernes', 'sabado': 'Sábado', 'domingo': 'Domingo' };
-    let texto = diasSeleccionados.length === 7 ? 'Todos los días' : diasSeleccionados.length >= 5 ? `${diasNombres[diasSeleccionados[0]]} a ${diasNombres[diasSeleccionados[diasSeleccionados.length - 1]]}` : diasSeleccionados.map(d => diasNombres[d]).join(', ');
-    return `${texto} ${horaApertura.toString().padStart(2, '0')}:00 - ${horaCierre.toString().padStart(2, '0')}:00`;
-  };
-  
-  const guardarHorarios = async () => {
+
+  const config = estadoConfig[cliente.estado] || estadoConfig.activo;
+  const porcentaje = cliente.porcentaje_uso || 0;
+  const barraColor = porcentaje > 80 ? 'bg-red-500' : porcentaje > 50 ? 'bg-yellow-500' : 'bg-green-500';
+
+  const handleGuardar = async () => {
+    const planActualNorm = cliente.plan?.toLowerCase().replace('+', '_plus');
+    if (planSeleccionado === planActualNorm) {
+      setEditando(false);
+      return;
+    }
+    
     setGuardando(true);
-    setMensaje(null);
     try {
-      const nuevoHorarioTexto = generarHorarioTexto();
-      const res = await fetchSeguro(`/api/${negocio}/config/horarios`, {
-        method: 'POST',
-        body: JSON.stringify({ hora_apertura: horaApertura, hora_cierre: horaCierre, dias_atencion: diasAtencion, horario_texto: nuevoHorarioTexto })
-      });
-      const data = await res.json();
-      if (data.success) { setHorarioTexto(nuevoHorarioTexto); setMensaje({ tipo: 'success', texto: '✅ Horarios guardados' }); setEditando(false); if (onConfigUpdate) onConfigUpdate(); }
-      else setMensaje({ tipo: 'error', texto: data.error || 'Error al guardar' });
-    } catch (e) { setMensaje({ tipo: 'error', texto: 'Error de conexión' }); }
-    finally { setGuardando(false); }
+      await onCambiarPlan(cliente.negocio, planSeleccionado);
+      setEditando(false);
+    } catch (err) {
+      alert('Error al cambiar plan: ' + err.message);
+    }
+    setGuardando(false);
+  };
+
+  const handleCancelar = () => {
+    setPlanSeleccionado(cliente.plan?.toLowerCase().replace('+', '_plus') || 'basico');
+    setEditando(false);
+  };
+
+  const formatPrecio = (precio) => {
+    return `$${precio.toLocaleString('es-CL')}`;
   };
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white/10 rounded-2xl p-4">
-        <h3 className="text-white font-bold mb-4">⚙️ Configuración</h3>
-        <div className="space-y-3">
-          <div className="flex justify-between"><span className="text-white/70">Negocio</span><span className="text-white font-bold">{config.negocio?.nombre || 'El Galpón de la Barba'}</span></div>
-          <div className="flex justify-between"><span className="text-white/70">Plan</span><span className="text-white font-bold">{config.plan || 'BASICO'}</span></div>
-          <div className="flex justify-between"><span className="text-white/70">Estado</span><span className={`font-bold ${config.abierto ? 'text-green-400' : 'text-red-400'}`}>{config.abierto ? '🟢 Abierto' : '🔴 Cerrado'}</span></div>
-          <div className="flex justify-between"><span className="text-white/70">Dirección</span><span className="text-white text-sm text-right">{config.direccion || 'Freirina 1981'}</span></div>
-        </div>
-      </div>
-
-      <div className="bg-white/10 rounded-2xl p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-white font-bold">⏰ Horario de Atención</h3>
-          {!editando && <button onClick={() => setEditando(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-lg text-sm font-medium">✏️ Editar</button>}
-        </div>
-        {mensaje && <div className={`mb-4 p-3 rounded-xl text-sm font-medium ${mensaje.tipo === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{mensaje.texto}</div>}
-        {!editando ? (
-          <div className="space-y-3">
-            <div className="flex justify-between"><span className="text-white/70">Horario</span><span className="text-white text-sm">{horarioTexto || config.horario_texto}</span></div>
-            <div><span className="text-white/70 text-sm">Días de atención:</span>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {DIAS_SEMANA.map(dia => <span key={dia.id} className={`px-2 py-1 rounded text-xs font-medium ${diasAtencion.includes(dia.id) ? 'bg-green-500/30 text-green-300' : 'bg-white/10 text-white/40'}`}>{dia.label}</span>)}
-              </div>
-            </div>
+    <tr className="border-b border-gray-100 hover:bg-gray-50">
+      <td className="py-4 px-4">
+        <div className="font-medium text-gray-800">{cliente.negocio}</div>
+        <div className="text-xs text-gray-400">Inicio: {cliente.fecha_inicio?.slice(0, 10)}</div>
+      </td>
+      <td className="py-4 px-4">
+        {editando ? (
+          <div className="flex items-center gap-2">
+            <select
+              value={planSeleccionado}
+              onChange={(e) => setPlanSeleccionado(e.target.value)}
+              className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={guardando}
+            >
+              {planesDisponibles.map(plan => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.nombre} - {formatPrecio(plan.precio)}/mes
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleGuardar}
+              disabled={guardando}
+              className="p-1 text-green-600 hover:bg-green-100 rounded"
+              title="Guardar"
+            >
+              {guardando ? '⏳' : '✅'}
+            </button>
+            <button
+              onClick={handleCancelar}
+              disabled={guardando}
+              className="p-1 text-red-600 hover:bg-red-100 rounded"
+              title="Cancelar"
+            >
+              ❌
+            </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div><label className="text-white/70 text-sm block mb-2">Días de atención:</label>
-              <div className="flex flex-wrap gap-2">
-                {DIAS_SEMANA.map(dia => <button key={dia.id} onClick={() => toggleDia(dia.id)} className={`px-3 py-2 rounded-xl text-sm font-bold transition-all ${diasAtencion.includes(dia.id) ? 'bg-green-500 text-white' : 'bg-white/10 text-white/60'}`}>{dia.label}</button>)}
-              </div>
-            </div>
-            <div><label className="text-white/70 text-sm block mb-2">Hora de apertura:</label>
-              <select value={horaApertura} onChange={(e) => setHoraApertura(parseInt(e.target.value))} className="w-full bg-white/20 text-white border-0 rounded-xl p-3 font-bold">
-                {HORAS.map(h => <option key={h.value} value={h.value} className="bg-gray-800">{h.label}</option>)}
-              </select>
-            </div>
-            <div><label className="text-white/70 text-sm block mb-2">Hora de cierre:</label>
-              <select value={horaCierre} onChange={(e) => setHoraCierre(parseInt(e.target.value))} className="w-full bg-white/20 text-white border-0 rounded-xl p-3 font-bold">
-                {HORAS.map(h => <option key={h.value} value={h.value} className="bg-gray-800">{h.label}</option>)}
-              </select>
-            </div>
-            <div className="bg-white/5 rounded-xl p-3"><span className="text-white/50 text-xs">Vista previa:</span><p className="text-white font-medium">{generarHorarioTexto()}</p></div>
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => { setEditando(false); setMensaje(null); }} disabled={guardando} className="flex-1 bg-white/10 text-white font-bold py-3 rounded-xl disabled:opacity-50">Cancelar</button>
-              <button onClick={guardarHorarios} disabled={guardando || diasAtencion.length === 0} className="flex-1 bg-green-500 text-white font-bold py-3 rounded-xl disabled:opacity-50">{guardando ? '⏳...' : '💾 Guardar'}</button>
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              {cliente.plan}
+            </span>
+            <button
+              onClick={() => setEditando(true)}
+              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+              title="Cambiar plan"
+            >
+              ✏️
+            </button>
           </div>
         )}
+      </td>
+      <td className="py-4 px-4">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 bg-gray-200 rounded-full h-2 w-24">
+            <div className={`h-2 rounded-full ${barraColor}`} style={{ width: `${Math.min(porcentaje, 100)}%` }} />
+          </div>
+          <span className="text-sm text-gray-600">
+            {cliente.es_ilimitado ? '♾️' : `${cliente.mensajes_mes?.toLocaleString()}/${cliente.limite?.toLocaleString()}`}
+          </span>
+        </div>
+      </td>
+      <td className="py-4 px-4 text-gray-600">${cliente.costo_estimado_usd?.toFixed(2)} USD</td>
+      <td className="py-4 px-4">
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+          {cliente.estado}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+// Componente de Costos
+function CostosChart({ costos }) {
+  if (!costos?.costos_por_cliente?.length) {
+    return <p className="text-gray-400 text-center py-8">Sin datos de costos</p>;
+  }
+  const maxCosto = Math.max(...costos.costos_por_cliente.map(c => c.costo_total_usd || 0));
+  return (
+    <div className="space-y-4">
+      {costos.costos_por_cliente.map((cliente, idx) => (
+        <div key={idx} className="flex items-center gap-4">
+          <div className="w-32 text-sm text-gray-600 truncate">{cliente.negocio}</div>
+          <div className="flex-1 bg-gray-200 rounded-full h-4">
+            <div className="h-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${(cliente.costo_total_usd / maxCosto) * 100}%` }} />
+          </div>
+          <div className="w-20 text-right text-sm font-medium text-gray-700">${cliente.costo_total_usd?.toFixed(3)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Componente de Estado del Sistema
+function EstadoSistema({ sistema }) {
+  if (!sistema) return null;
+  const servicios = sistema.estado?.servicios || {};
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {Object.entries(servicios).map(([nombre, info]) => (
+        <div key={nombre} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+          <div className={`w-3 h-3 rounded-full ${info.conectado ? 'bg-green-500' : 'bg-red-500'}`} />
+          <div>
+            <p className="font-medium text-gray-800 capitalize">{nombre}</p>
+            <p className="text-xs text-gray-400">{info.modelo || (info.conectado ? 'Conectado' : 'Desconectado')}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Componente de Top Productos
+function TopProductos({ productos }) {
+  if (!productos?.productos?.length) {
+    return <p className="text-gray-400 text-center py-4">Sin datos de productos</p>;
+  }
+  
+  const colores = ['bg-yellow-500', 'bg-gray-400', 'bg-orange-400', 'bg-blue-400', 'bg-purple-400'];
+  const medallas = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+  
+  return (
+    <div className="space-y-3">
+      {productos.productos.map((prod, idx) => (
+        <div key={idx} className="flex items-center gap-3">
+          <span className="text-xl">{medallas[idx]}</span>
+          <div className="flex-1">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-sm font-medium text-gray-700 truncate">{prod.nombre}</span>
+              <span className="text-sm text-gray-500">{prod.cantidad} vendidos</span>
+            </div>
+            <div className="bg-gray-200 rounded-full h-2">
+              <div className={`h-2 rounded-full ${colores[idx]}`} style={{ width: `${prod.porcentaje}%` }} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <div className="pt-2 border-t border-gray-100 text-center">
+        <span className="text-sm text-gray-500">Total: {productos.total_vendidos} productos vendidos</span>
       </div>
     </div>
   );
 }
 
-// ============================================
-// ✂️ EDITOR DE SERVICIOS
-// ============================================
-function EditorServicios({ onClose }) {
-  const [servicios, setServicios] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editando, setEditando] = useState(null);
-  const [nuevo, setNuevo] = useState(null);
-
-  useEffect(() => { cargarServicios(); }, []);
-
-  const cargarServicios = async () => {
-    setLoading(true);
-    try {
-      const res = await fetchSeguro('/api/barberia/servicios');
-      const data = await res.json();
-      if (data.success) setServicios(data.servicios);
-    } catch (e) { console.error('Error:', e); }
-    setLoading(false);
-  };
-
-  const guardarServicio = async (servicio) => {
-    setSaving(true);
-    try {
-      const isNew = !servicio.id;
-      const url = isNew ? '/api/barberia/servicios' : `/api/barberia/servicios/${servicio.id}`;
-      const res = await fetchSeguro(url, { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(servicio) });
-      const data = await res.json();
-      if (data.success) { await cargarServicios(); setEditando(null); setNuevo(null); }
-      else alert(data.error || 'Error guardando');
-    } catch (e) { alert('Error de conexión'); }
-    setSaving(false);
-  };
-
-  const eliminarServicio = async (id) => {
-    if (!confirm('¿Eliminar este servicio?')) return;
-    try {
-      const res = await fetchSeguro(`/api/barberia/servicios/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) cargarServicios();
-    } catch (e) { alert('Error eliminando'); }
-  };
-
-  const FormServicio = ({ servicio, onSave, onCancel }) => {
-    const [form, setForm] = useState(servicio || { key: '', nombre: '', precio: '', duracion: 30, descripcion: '', categoria: 'corte', disponible: true });
-    return (
-      <div className="bg-white/10 rounded-xl p-4 mb-4">
-        <h3 className="text-white font-bold mb-3">{servicio?.id ? '✏️ Editar' : '➕ Nuevo'} Servicio</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <input type="text" placeholder="Clave (ej: corte_fade)" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })}
-            className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50" disabled={!!servicio?.id} />
-          <input type="text" placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-            className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50" />
-          <input type="number" placeholder="Precio $" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })}
-            className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50" />
-          <div className="flex items-center gap-2">
-            <input type="number" placeholder="Duración" value={form.duracion} onChange={(e) => setForm({ ...form, duracion: e.target.value })}
-              className="flex-1 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50" />
-            <span className="text-white/60">min</span>
-          </div>
-          <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-            className="bg-white/20 text-white rounded-lg px-3 py-2">
-            <option value="corte">✂️ Corte</option>
-            <option value="barba">🧔 Barba</option>
-            <option value="combo">🔥 Combo</option>
-            <option value="especial">⭐ Especial</option>
-          </select>
-          <textarea placeholder="Descripción" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-            className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50" rows={2} />
+// Componente de Horarios Pico
+function HorariosPico({ horarios }) {
+  if (!horarios?.por_hora) {
+    return <p className="text-gray-400 text-center py-4">Sin datos de horarios</p>;
+  }
+  
+  const horas = Object.entries(horarios.por_hora);
+  const maxMensajes = Math.max(...horas.map(([, v]) => v));
+  
+  const horasVisibles = horas.filter(([h]) => parseInt(h) >= 8 && parseInt(h) <= 23);
+  
+  return (
+    <div>
+      <div className="flex items-end gap-1 h-32 mb-4">
+        {horasVisibles.map(([hora, cantidad]) => {
+          const altura = maxMensajes > 0 ? (cantidad / maxMensajes) * 100 : 0;
+          const esPico = horarios.horas_pico?.some(p => p.hora === `${hora}:00`);
+          return (
+            <div key={hora} className="flex-1 flex flex-col items-center">
+              <div 
+                className={`w-full rounded-t transition-all ${esPico ? 'bg-orange-500' : 'bg-blue-400'}`}
+                style={{ height: `${altura}%`, minHeight: cantidad > 0 ? '4px' : '0' }}
+                title={`${hora}:00 - ${cantidad} mensajes`}
+              />
+              <span className="text-xs text-gray-400 mt-1">{hora}</span>
+            </div>
+          );
+        })}
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="bg-orange-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-orange-600">Hora Pico</p>
+          <p className="text-lg font-bold text-orange-700">{horarios.hora_pico_principal || 'N/A'}</p>
         </div>
-        <div className="flex gap-2 mt-3">
-          <button onClick={() => onSave(form)} disabled={saving || !form.nombre || !form.precio}
-            className="flex-1 bg-green-500 text-white font-bold py-2 rounded-lg disabled:opacity-50">{saving ? '⏳...' : '💾 Guardar'}</button>
-          <button onClick={onCancel} className="px-4 bg-white/20 text-white rounded-lg">✕</button>
+        <div className="bg-blue-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-blue-600">Día más activo</p>
+          <p className="text-lg font-bold text-blue-700">{horarios.dia_pico || 'N/A'}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Componente de Fantasmas (Carritos Abandonados)
+function FantasmasStats({ fantasmas }) {
+  if (!fantasmas) return null;
+  
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <div className="bg-red-50 rounded-xl p-4 text-center">
+        <p className="text-3xl font-bold text-red-600">{fantasmas.total_activos || 0}</p>
+        <p className="text-xs text-red-500">Carritos abandonados</p>
+      </div>
+      <div className="bg-yellow-50 rounded-xl p-4 text-center">
+        <p className="text-2xl font-bold text-yellow-600">{fantasmas.valor_perdido_formato || '$0'}</p>
+        <p className="text-xs text-yellow-500">Valor potencial perdido</p>
+      </div>
+      <div className="bg-green-50 rounded-xl p-4 text-center">
+        <p className="text-2xl font-bold text-green-600">{fantasmas.recuperados || 0}</p>
+        <p className="text-xs text-green-500">Recuperados</p>
+      </div>
+      <div className="bg-blue-50 rounded-xl p-4 text-center">
+        <p className="text-2xl font-bold text-blue-600">{fantasmas.tasa_recuperacion || 0}%</p>
+        <p className="text-xs text-blue-500">Tasa recuperación</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
+export default function AdminDashboard() {
+  const { data: session, status } = useSession();
+  
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Estados de datos
+  const [dashboard, setDashboard] = useState(null);
+  const [clientes, setClientes] = useState([]);
+  const [alertas, setAlertas] = useState([]);
+  const [costos, setCostos] = useState(null);
+  const [ingresos, setIngresos] = useState(null);
+  const [sistema, setSistema] = useState(null);
+  
+  // Estado para métricas avanzadas
+  const [metricasAvanzadas, setMetricasAvanzadas] = useState(null);
+
+  const fetchAdmin = useCallback(async (endpoint, options = {}) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+        headers: {
+          'X-Admin-Key': ADMIN_KEY,
+          'Content-Type': 'application/json'
+        },
+        ...options
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      console.error(`Error fetching ${endpoint}:`, err);
+      throw err;
+    }
+  }, []);
+
+  // 🆕 Función para cambiar plan de cliente
+  const cambiarPlanCliente = useCallback(async (negocio, nuevoPlan) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/cliente/plan`, {
+        method: 'POST',
+        headers: {
+          'X-Admin-Key': ADMIN_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ negocio, plan: nuevoPlan })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Error ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      // Actualizar lista de clientes localmente
+      setClientes(prev => prev.map(c => 
+        c.negocio === negocio 
+          ? { ...c, plan: nuevoPlan.charAt(0).toUpperCase() + nuevoPlan.slice(1) }
+          : c
+      ));
+      
+      return data;
+    } catch (err) {
+      console.error('Error cambiando plan:', err);
+      throw err;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    
+    const cargarDatos = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const [dashData, clientesData, alertasData, costosData, sistemaData] = await Promise.allSettled([
+          fetchAdmin('/api/admin/dashboard'),
+          fetchAdmin('/api/admin/clientes'),
+          fetchAdmin('/api/admin/alertas'),
+          fetchAdmin('/api/admin/costos'),
+          fetchAdmin('/api/admin/sistema')
+        ]);
+
+        if (dashData.status === 'fulfilled') setDashboard(dashData.value);
+        if (clientesData.status === 'fulfilled') setClientes(clientesData.value.clientes || []);
+        if (alertasData.status === 'fulfilled') setAlertas(alertasData.value.alertas || []);
+        if (costosData.status === 'fulfilled') setCostos(costosData.value);
+        if (sistemaData.status === 'fulfilled') setSistema(sistemaData.value);
+
+        // Cargar métricas avanzadas
+        try {
+          const [ingresosData, metricasData] = await Promise.allSettled([
+            fetchAdmin('/api/admin/ingresos'),
+            fetchAdmin('/api/admin/metricas-avanzadas')
+          ]);
+          
+          if (ingresosData.status === 'fulfilled') setIngresos(ingresosData.value);
+          if (metricasData.status === 'fulfilled') setMetricasAvanzadas(metricasData.value);
+        } catch (e) {
+          console.log('Métricas avanzadas no disponibles');
+        }
+
+      } catch (err) {
+        setError('Error cargando datos');
+        console.error(err);
+      }
+      
+      setLoading(false);
+    };
+    
+    cargarDatos();
+    const interval = setInterval(cargarDatos, 60000);
+    return () => clearInterval(interval);
+  }, [status, fetchAdmin]);
+
+  // Extraer métricas
+  const kpis = dashboard?.kpis || {};
+  const conversion = metricasAvanzadas?.conversion || {};
+  const fantasmas = metricasAvanzadas?.fantasmas || {};
+  const topProductos = metricasAvanzadas?.top_productos || {};
+  const horariosPico = metricasAvanzadas?.horarios_pico || {};
+  const tiempoRespuesta = metricasAvanzadas?.tiempo_respuesta || {};
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Verificando acceso...</p>
         </div>
       </div>
     );
-  };
+  }
 
-  const iconoCategoria = { 'corte': '✂️', 'barba': '🧔', 'combo': '🔥', 'especial': '⭐' };
-  const colorCategoria = { 'corte': 'from-blue-500/30 to-cyan-500/30', 'barba': 'from-amber-500/30 to-orange-500/30', 'combo': 'from-purple-500/30 to-pink-500/30', 'especial': 'from-yellow-500/30 to-amber-500/30' };
+  if (status === 'unauthenticated') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-4">🔐</div>
+            <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+            <p className="text-gray-500 mt-2">Acceso restringido</p>
+          </div>
+          <button
+            onClick={() => window.location.href = '/api/auth/signin'}
+            className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium hover:from-blue-700 hover:to-blue-800 transition-all"
+          >
+            Iniciar Sesión con Google
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  if (loading) return <div className="text-center text-white py-10"><div className="text-4xl mb-4 animate-spin">⏳</div><p>Cargando servicios...</p></div>;
+  const tabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'analiticas', label: 'Analíticas', icon: '📈' },
+    { id: 'clientes', label: 'Clientes', icon: '👥' },
+    { id: 'costos', label: 'Costos', icon: '💰' },
+    { id: 'alertas', label: 'Alertas', icon: '⚠️', badge: alertas.length },
+    { id: 'ingresos', label: 'Ingresos', icon: '💵' },
+    { id: 'sistema', label: 'Sistema', icon: '🔧' }
+  ];
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-white">✂️ Editor de Servicios</h2>
-        {onClose && <button onClick={onClose} className="text-white/60 hover:text-white">✕ Cerrar</button>}
-      </div>
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {['corte', 'barba', 'combo', 'especial'].map(cat => (
-          <div key={cat} className={`bg-gradient-to-r ${colorCategoria[cat]} rounded-xl p-3 text-center`}>
-            <div className="text-2xl">{iconoCategoria[cat]}</div>
-            <div className="text-white font-bold">{servicios.filter(s => s.categoria === cat).length}</div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-3xl">🎛️</div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
+                <p className="text-sm text-gray-500">Panel de Control SaaS</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">{session?.user?.email}</span>
+              <button
+                onClick={() => signOut()}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
-      {!nuevo && <button onClick={() => setNuevo({})} className="w-full bg-indigo-500/20 border-2 border-dashed border-indigo-500 text-indigo-400 py-3 rounded-xl mb-4">➕ Agregar Servicio</button>}
-      {nuevo && <FormServicio servicio={null} onSave={guardarServicio} onCancel={() => setNuevo(null)} />}
-      {['corte', 'barba', 'combo', 'especial'].map(categoria => {
-        const serviciosCategoria = servicios.filter(s => s.categoria === categoria);
-        if (serviciosCategoria.length === 0) return null;
-        return (
-          <div key={categoria} className="mb-6">
-            <h3 className="text-white font-bold mb-2 flex items-center gap-2">{iconoCategoria[categoria]} {categoria.charAt(0).toUpperCase() + categoria.slice(1)}s</h3>
-            <div className="space-y-3">
-              {serviciosCategoria.map(serv => (
-                editando === serv.id ? <FormServicio key={serv.id} servicio={serv} onSave={guardarServicio} onCancel={() => setEditando(null)} /> : (
-                  <div key={serv.id} className={`bg-gradient-to-r ${colorCategoria[serv.categoria]} rounded-xl p-4 ${!serv.disponible ? 'opacity-50' : ''}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-white font-bold">{serv.nombre}</h4>
-                        <p className="text-white/60 text-sm">{serv.descripcion}</p>
-                        <span className="text-xs bg-white/20 px-2 py-1 rounded text-white/80 mt-2 inline-block">⏱️ {serv.duracion} min</span>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-white font-bold text-xl">${serv.precio?.toLocaleString('es-CL')}</div>
-                        <div className="flex gap-1 mt-2">
-                          <button onClick={() => guardarServicio({ ...serv, disponible: !serv.disponible })} className={`px-2 py-1 rounded text-xs ${serv.disponible ? 'bg-green-500' : 'bg-red-500'} text-white`}>{serv.disponible ? '✓' : '✗'}</button>
-                          <button onClick={() => setEditando(serv.id)} className="px-2 py-1 rounded text-xs bg-blue-500 text-white">✏️</button>
-                          <button onClick={() => eliminarServicio(serv.id)} className="px-2 py-1 rounded text-xs bg-red-500 text-white">🗑️</button>
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <nav className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-1 overflow-x-auto py-2">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all flex items-center gap-2
+                  ${activeTab === tab.id 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+                {tab.badge > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{tab.badge}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        
+        {loading ? (
+          <div className="text-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Cargando datos...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+            <p className="text-red-600">{error}</p>
+            <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg">
+              Reintentar
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* TAB: DASHBOARD */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-8">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <KPICard titulo="Mensajes Hoy" valor={kpis.mensajes_hoy?.toLocaleString() || 0} icono="💬" color="blue" />
+                  <KPICard titulo="Clientes Activos" valor={kpis.clientes_activos || 0} icono="👥" color="green" />
+                  <KPICard titulo="Pedidos Hoy" valor={kpis.pedidos_hoy || 0} icono="🛒" color="purple" />
+                  <KPICard titulo="Ingresos Hoy" valor={`$${(kpis.ingresos_hoy || 0).toLocaleString()}`} icono="💰" color="orange" />
+                </div>
+
+                {/* Métricas adicionales */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <KPICard titulo="Tasa Conversión" valor={conversion.tasa_formato || '0%'} icono="🎯" color="cyan" />
+                  <KPICard titulo="Carritos Abandonados" valor={fantasmas.total_activos || 0} icono="👻" color="red" />
+                  <KPICard titulo="Tiempo Respuesta" valor={tiempoRespuesta.promedio_formato || '0s'} icono="⚡" color="yellow" />
+                  <KPICard titulo="MRR" valor={ingresos?.mrr?.formato || '$0'} icono="📈" color="pink" />
+                </div>
+
+                {/* Alertas y Sistema */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">⚠️ Alertas Recientes</h3>
+                    {alertas.length > 0 ? alertas.slice(0, 3).map((a, i) => <AlertaCard key={i} alerta={a} />) : <p className="text-center py-8 text-4xl">✅</p>}
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">🔧 Estado del Sistema</h3>
+                    <EstadoSistema sistema={sistema} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: ANALÍTICAS */}
+            {activeTab === 'analiticas' && (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Tasa de Conversión Detallada */}
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Embudo de Conversión</h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-full bg-blue-100 rounded-lg p-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-blue-700 font-medium">Conversaciones iniciadas</span>
+                            <span className="text-2xl font-bold text-blue-700">{conversion.conversaciones || 0}</span>
+                          </div>
+                          <div className="bg-blue-500 h-3 rounded-full mt-2" style={{width: '100%'}} />
                         </div>
+                      </div>
+                      <div className="flex justify-center text-gray-400">↓</div>
+                      <div className="flex items-center gap-4">
+                        <div className="w-full bg-green-100 rounded-lg p-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-green-700 font-medium">Pedidos completados</span>
+                            <span className="text-2xl font-bold text-green-700">{conversion.pedidos || 0}</span>
+                          </div>
+                          <div className="bg-green-500 h-3 rounded-full mt-2" style={{width: `${conversion.tasa || 0}%`}} />
+                        </div>
+                      </div>
+                      <div className="text-center mt-4 p-4 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl">
+                        <p className="text-sm text-gray-500">Tasa de Conversión</p>
+                        <p className="text-4xl font-bold text-cyan-600">{conversion.tasa_formato || '0%'}</p>
                       </div>
                     </div>
                   </div>
-                )
-              ))}
-            </div>
-          </div>
-        );
-      })}
-      {servicios.length === 0 && !nuevo && <div className="text-center py-10"><div className="text-4xl mb-2">💈</div><p className="text-white/60">No hay servicios</p></div>}
-    </div>
-  );
-}
 
-// ============================================
-// 💳 PANEL DE SUSCRIPCIÓN
-// ============================================
-function SuscripcionPanel({ negocio, onClose }) {
-  const [suscripcion, setSuscripcion] = useState(null);
-  const [historial, setHistorial] = useState([]);
-  const [precios, setPrecios] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [procesando, setProcesando] = useState(false);
-  const [tab, setTab] = useState('estado');
+                  {/* Carritos Abandonados */}
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">👻 Carritos Abandonados</h3>
+                    <FantasmasStats fantasmas={fantasmas} />
+                  </div>
+                </div>
 
-  useEffect(() => { cargarDatos(); }, [negocio]);
-
-  const cargarDatos = async () => {
-    setLoading(true);
-    try {
-      const [subRes, histRes] = await Promise.all([
-        fetchSeguro(`/api/suscripcion/${negocio}`),
-        fetchSeguro(`/api/suscripcion/${negocio}/historial`)
-      ]);
-      const subData = await subRes.json();
-      const histData = await histRes.json();
-      if (subData.success) { setSuscripcion(subData.suscripcion); setPrecios(subData.precios || {}); }
-      if (histData.success) setHistorial(histData.pagos || []);
-    } catch (e) { console.error('Error:', e); }
-    setLoading(false);
-  };
-
-  const iniciarPago = async (plan) => {
-    if (procesando) return;
-    setProcesando(true);
-    try {
-      const res = await fetchSeguro(`/api/suscripcion/${negocio}/pagar`, { method: 'POST', body: JSON.stringify({ plan }) });
-      const data = await res.json();
-      if (data.success && data.url_pago) window.location.href = data.url_pago;
-      else alert(data.error || 'Error iniciando pago');
-    } catch (e) { alert('Error de conexión'); }
-    setProcesando(false);
-  };
-
-  const beneficiosPlan = {
-    'BASICO': ['✓ Reservas automáticas WhatsApp', '✓ Confirmación instantánea', '✓ Dashboard básico', '✓ Google Sheets', '✗ Pagos online', '✗ Recordatorios 24h', '✗ Rescate abandonados'],
-    'PRO': ['✓ Todo del Básico', '✓ PAGOS ONLINE', '✓ Recordatorios 24h antes', '✓ Rescate citas abandonadas', '✓ Export Excel completo', '✗ Cliente frecuente', '✗ Multi-profesional'],
-    'PRO_PLUS': ['✓ Todo del PRO', '✓ Cliente frecuente', '✓ Upselling auto', '✓ Multi-profesional', '✓ PDF con gráficos', '✗ Análisis IA'],
-    'ENTERPRISE': ['✓ Todo del PRO+', '✓ Análisis IA', '✓ API personalizada', '✓ Multi-sucursal', '✓ Soporte prioritario']
-  };
-
-  const colorPlan = { 'BASICO': 'from-gray-500 to-gray-600', 'PRO': 'from-blue-500 to-cyan-500', 'PRO_PLUS': 'from-purple-500 to-pink-500', 'ENTERPRISE': 'from-amber-500 to-orange-500' };
-  const labelPlan = { 'BASICO': 'Básico', 'PRO': 'PRO', 'PRO_PLUS': 'PRO+', 'ENTERPRISE': 'Enterprise' };
-
-  if (loading) return <div className="text-center text-white py-10"><div className="text-4xl mb-4 animate-spin">⏳</div><p>Cargando...</p></div>;
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-white">💳 Suscripción</h2>
-        {onClose && <button onClick={onClose} className="text-white/60 hover:text-white">✕ Cerrar</button>}
-      </div>
-      <div className="flex gap-2 mb-4">
-        {['estado', 'planes', 'historial'].map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 rounded-xl font-bold ${tab === t ? 'bg-white text-indigo-600' : 'bg-white/20 text-white'}`}>
-            {t === 'estado' ? '📊 Estado' : t === 'planes' ? '💎 Planes' : '📋 Historial'}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'estado' && suscripcion && (
-        <div className="space-y-4">
-          <div className={`bg-gradient-to-br ${colorPlan[suscripcion.plan] || colorPlan['BASICO']} rounded-2xl p-6 text-white`}>
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <div className="text-sm opacity-80">Plan actual</div>
-                <div className="text-3xl font-bold">{labelPlan[suscripcion.plan] || suscripcion.plan}</div>
-                {suscripcion.es_trial && <span className="bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-full font-bold">PRUEBA GRATIS</span>}
-              </div>
-              <div className="text-5xl">{suscripcion.plan === 'BASICO' ? '🚀' : suscripcion.plan === 'PRO' ? '⭐' : suscripcion.plan === 'PRO_PLUS' ? '💎' : '👑'}</div>
-            </div>
-            <div className="bg-white/20 rounded-xl p-4 mb-4">
-              <div className="flex justify-between items-center">
-                <div><div className="text-sm opacity-80">Días restantes</div><div className={`text-4xl font-bold ${suscripcion.dias_restantes <= 5 ? 'text-red-300' : ''}`}>{suscripcion.dias_restantes}</div></div>
-                <div className="text-right"><div className="text-sm opacity-80">Vence</div><div className="font-medium">{suscripcion.fecha_expiracion ? new Date(suscripcion.fecha_expiracion).toLocaleDateString('es-CL') : 'N/A'}</div></div>
-              </div>
-              <div className="mt-3 h-2 bg-white/30 rounded-full overflow-hidden"><div className={`h-full ${suscripcion.dias_restantes <= 5 ? 'bg-red-400' : 'bg-white'}`} style={{ width: `${Math.min(100, (suscripcion.dias_restantes / 31) * 100)}%` }} /></div>
-            </div>
-            {suscripcion.por_vencer && <div className="bg-red-500/30 border border-red-400 rounded-xl p-3 mb-4">⚠️ ¡Tu plan está por vencer!</div>}
-            <button onClick={() => setTab('planes')} className="w-full bg-white text-indigo-600 font-bold py-3 rounded-xl hover:scale-105 transition-transform">{suscripcion.es_trial || suscripcion.vencida ? '🚀 Activar Plan' : '🔄 Renovar / Mejorar'}</button>
-          </div>
-        </div>
-      )}
-
-      {tab === 'planes' && (
-        <div className="space-y-4">
-          {Object.entries(precios).map(([plan, precio]) => (
-            <div key={plan} className={`relative bg-gradient-to-br ${colorPlan[plan]} rounded-2xl p-5 text-white ${suscripcion?.plan === plan ? 'ring-4 ring-white' : ''}`}>
-              {plan === 'PRO' && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-xs px-3 py-1 rounded-full font-bold">⭐ MÁS POPULAR</div>}
-              <div className="flex justify-between items-start mb-3">
-                <div><div className="text-2xl font-bold">{labelPlan[plan]}</div><div className="text-4xl font-bold mt-1">${precio.toLocaleString('es-CL')}<span className="text-sm font-normal opacity-80">/mes + IVA</span></div></div>
-                <div className="text-4xl">{plan === 'BASICO' ? '🚀' : plan === 'PRO' ? '⭐' : plan === 'PRO_PLUS' ? '💎' : '👑'}</div>
-              </div>
-              <div className="bg-white/20 rounded-xl p-3 mb-4"><ul className="space-y-1 text-sm">{beneficiosPlan[plan]?.slice(0, 6).map((b, i) => <li key={i} className={b.startsWith('✗') ? 'opacity-50' : ''}>{b}</li>)}</ul></div>
-              {suscripcion?.plan === plan && !suscripcion?.es_trial ? <div className="bg-white/30 text-center py-2 rounded-xl font-bold">✓ Plan actual</div> : (
-                <button onClick={() => iniciarPago(plan)} disabled={procesando} className="w-full bg-white text-gray-800 font-bold py-3 rounded-xl hover:scale-105 transition-transform disabled:opacity-50">{procesando ? '⏳...' : `Contratar ${labelPlan[plan]}`}</button>
-              )}
-            </div>
-          ))}
-          <p className="text-white/50 text-xs text-center">Precios mensuales + IVA. Pago seguro con Flow.</p>
-        </div>
-      )}
-
-      {tab === 'historial' && (
-        <div className="space-y-3">
-          {historial.length === 0 ? <div className="text-center py-10"><div className="text-4xl mb-2">📋</div><p className="text-white/60">No hay pagos registrados</p></div> : (
-            historial.map(pago => (
-              <div key={pago.id} className="bg-white/10 rounded-xl p-4">
-                <div className="flex justify-between items-center">
-                  <div><div className="text-white font-bold">${pago.monto?.toLocaleString('es-CL')}</div><div className="text-white/60 text-sm">{pago.fecha ? new Date(pago.fecha).toLocaleDateString('es-CL') : 'N/A'}</div></div>
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${pago.estado === 'pagado' ? 'bg-green-500' : 'bg-yellow-500'} text-white`}>{pago.estado === 'pagado' ? '✓ Pagado' : '⏳ Pendiente'}</span>
+                {/* Top Productos y Horarios */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">🏆 Productos Más Vendidos</h3>
+                    <TopProductos productos={topProductos} />
+                  </div>
+                  
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">📊 Actividad por Horario</h3>
+                    <HorariosPico horarios={horariosPico} />
+                  </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+            )}
 
-// ============================================
-// 🏠 DASHBOARD PRINCIPAL BARBERÍA
-// ============================================
-export default function BarberiaDashboard() {
-  const [citas, setCitas] = useState([]);
-  const [noAsistieron, setNoAsistieron] = useState([]);
-  const [sinAgendar, setSinAgendar] = useState([]);
-  const [vips, setVips] = useState([]);
-  const [recordatorios, setRecordatorios] = useState([]);
-  const [stats, setStats] = useState({});
-  const [config, setConfig] = useState({ plan: 'BASICO' });
-  const [filtro, setFiltro] = useState('activas');
-  const [vista, setVista] = useState('citas');
-  const [hora, setHora] = useState('');
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingCita, setLoadingCita] = useState(null);
-  const [loadingNoAsistio, setLoadingNoAsistio] = useState(null);
-  const [loadingSinAgendar, setLoadingSinAgendar] = useState(null);
-  const [loadingRecordatorio, setLoadingRecordatorio] = useState(null);
-  const [rescatandoTodos, setRescatandoTodos] = useState(false);
-  const [user, setUser] = useState(null);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);
-  const [countdown, setCountdown] = useState(10);
-  const [mounted, setMounted] = useState(false);
+            {/* TAB: CLIENTES - 🆕 CON EDICIÓN DE PLAN */}
+            {activeTab === 'clientes' && (
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                <div className="p-6 border-b flex justify-between items-center">
+                  <h2 className="text-lg font-bold">👥 Clientes ({clientes.length})</h2>
+                  <div className="text-sm text-gray-500">
+                    💡 Haz clic en ✏️ para cambiar el plan de un cliente
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Negocio</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Plan</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Uso</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Costo</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientes.map((c, i) => (
+                        <ClienteRow 
+                          key={i} 
+                          cliente={c} 
+                          onCambiarPlan={cambiarPlanCliente}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
-  const router = useRouter();
-  const audioContextRef = useRef(null);
-  const previousCitasRef = useRef([]);
+            {/* TAB: COSTOS */}
+            {activeTab === 'costos' && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">💰 Costos de IA</h2>
+                <CostosChart costos={costos} />
+              </div>
+            )}
 
-  useEffect(() => { setMounted(true); }, []);
+            {/* TAB: ALERTAS */}
+            {activeTab === 'alertas' && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">⚠️ Alertas ({alertas.length})</h2>
+                {alertas.length > 0 ? alertas.map((a, i) => <AlertaCard key={i} alerta={a} />) : <p className="text-center py-8 text-6xl">✅</p>}
+              </div>
+            )}
 
-  const playSound = useCallback(() => {
-    if (typeof window === 'undefined' || !audioContextRef.current) return;
-    try {
-      const ctx = audioContextRef.current;
-      [600, 800, 1000].forEach((freq, i) => {
-        setTimeout(() => {
-          if (!audioContextRef.current) return;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = freq; osc.type = 'sine';
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
-        }, i * 150);
-      });
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
-    } catch (e) { console.error('Error sonido:', e); }
-  }, []);
+            {/* TAB: INGRESOS */}
+            {activeTab === 'ingresos' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+                  <h2 className="text-lg font-bold mb-4">💵 MRR</h2>
+                  <p className="text-5xl font-bold text-green-600">{ingresos?.mrr?.formato || '$0'}</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow-lg p-6">
+                  <h2 className="text-lg font-bold mb-4">📈 Por Plan</h2>
+                  {ingresos?.ingresos_por_plan?.map((p, i) => (
+                    <div key={i} className="flex justify-between p-2 bg-gray-50 rounded mb-2">
+                      <span>{p.plan}</span><span className="font-bold">${p.total_clp?.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-  const enableSound = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
-      setSoundEnabled(true); playSound();
-      if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
-    } catch (e) { console.error('Error habilitando sonido:', e); }
-  }, [playSound]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const stored = localStorage.getItem('dashboard_user');
-      if (!stored) { router.push('/login'); return; }
-      const parsed = JSON.parse(stored);
-      if (parsed.negocio !== 'barberia') { router.push('/login'); return; }
-      setUser(parsed);
-    } catch (e) { router.push('/login'); }
-  }, [router]);
-
-  const cargarConfig = useCallback(async () => { try { const res = await fetchSeguro(`/api/barberia/config`); const data = await res.json(); if (data.success) setConfig(data); } catch (e) { console.error('Error:', e); } }, []);
-  const cargarStats = useCallback(async () => { try { const res = await fetchSeguro(`/api/barberia/stats/rapidas`); const data = await res.json(); if (data.success) setStats(data); } catch (e) { console.error('Error:', e); } }, []);
-
-  const cargarCitas = useCallback(async () => {
-    try {
-      const res = await fetchSeguro(`/api/barberia/citas-db?fecha=${fechaSeleccionada}&estado=todos`);
-      const data = await res.json();
-      if (data.success && data.citas) {
-        const prevIds = new Set(previousCitasRef.current.map(c => c.id));
-        const nuevas = data.citas.filter(c => !prevIds.has(c.id) && c.estado === 'Confirmada');
-        if (nuevas.length > 0 && previousCitasRef.current.length > 0 && soundEnabled) {
-          playSound(); setShowAlert(true); setTimeout(() => setShowAlert(false), 5000);
-          if ('Notification' in window && Notification.permission === 'granted') new Notification('🔔 Nueva Cita!', { body: `${nuevas[0].nombre} - ${nuevas[0].hora}`, icon: '💈' });
-        }
-        previousCitasRef.current = data.citas; setCitas(data.citas);
-      }
-    } catch (e) { console.error('Error:', e); }
-    finally { setIsLoading(false); }
-  }, [fechaSeleccionada, soundEnabled, playSound]);
-
-  const cargarNoAsistieron = useCallback(async () => { try { const res = await fetchSeguro(`/api/barberia/no-asistieron`); const data = await res.json(); if (data.success) setNoAsistieron(data.clientes || []); } catch (e) { console.error('Error:', e); } }, []);
-  const cargarSinAgendar = useCallback(async () => { try { const res = await fetchSeguro(`/api/barberia/sin-agendar`); const data = await res.json(); if (data.success) setSinAgendar(data.prospectos || []); } catch (e) { console.error('Error:', e); } }, []);
-  const cargarVips = useCallback(async () => { try { const res = await fetchSeguro(`/api/barberia/vips`); const data = await res.json(); if (data.success) setVips(data.clientes || []); } catch (e) { console.error('Error:', e); } }, []);
-  const cargarRecordatorios = useCallback(async () => { try { const res = await fetchSeguro(`/api/barberia/recordatorios`); const data = await res.json(); if (data.success) setRecordatorios(data.citas || []); } catch (e) { console.error('Error:', e); } }, []);
-
-  useEffect(() => { if (typeof window === 'undefined') return; const updateHora = () => setHora(new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })); updateHora(); const interval = setInterval(updateHora, 1000); return () => clearInterval(interval); }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    cargarConfig(); cargarStats(); cargarCitas(); cargarNoAsistieron(); cargarSinAgendar(); cargarVips(); cargarRecordatorios();
-    const interval = setInterval(() => { cargarStats(); cargarCitas(); setCountdown(10); }, 10000);
-    return () => clearInterval(interval);
-  }, [user, cargarConfig, cargarStats, cargarCitas, cargarNoAsistieron, cargarSinAgendar, cargarVips, cargarRecordatorios]);
-
-  useEffect(() => { if (user) cargarCitas(); }, [fechaSeleccionada, user, cargarCitas]);
-  useEffect(() => { if (!user) return; const interval = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 10), 1000); return () => clearInterval(interval); }, [user]);
-
-  const cambiarEstado = async (id, nuevoEstado) => {
-    setLoadingCita(id);
-    try { const res = await fetchSeguro(`/api/barberia/citas/estado`, { method: 'POST', body: JSON.stringify({ id, estado: nuevoEstado }) }); const data = await res.json(); if (data.success) { await cargarCitas(); await cargarStats(); await cargarNoAsistieron(); } else alert('Error: ' + (data.error || 'Desconocido')); }
-    catch (e) { alert('Error de conexión'); }
-    finally { setLoadingCita(null); }
-  };
-
-  const completarNotificar = async (id) => {
-    setLoadingCita(id);
-    try { const res = await fetchSeguro(`/api/barberia/citas/completar-notificar`, { method: 'POST', body: JSON.stringify({ id }) }); const data = await res.json(); if (data.success) { await cargarCitas(); await cargarStats(); alert(data.mensaje); } else alert('Error: ' + (data.error || 'Desconocido')); }
-    catch (e) { alert('Error de conexión'); }
-    finally { setLoadingCita(null); }
-  };
-
-  const notificarNoAsistio = async (id) => {
-    setLoadingNoAsistio(id);
-    try { const res = await fetchSeguro(`/api/barberia/no-asistieron/${id}/notificar`, { method: 'POST' }); const data = await res.json(); if (data.success) { await cargarNoAsistieron(); alert(data.mensaje); } else alert('Error: ' + (data.error || 'Desconocido')); }
-    catch (e) { alert('Error de conexión'); }
-    finally { setLoadingNoAsistio(null); }
-  };
-
-  const rescatarTodosNoAsistieron = async () => {
-    if (!confirm('¿Rescatar a todos los que no asistieron?')) return;
-    setRescatandoTodos(true);
-    try { const res = await fetchSeguro(`/api/barberia/no-asistieron/notificar-todos`, { method: 'POST' }); const data = await res.json(); alert(data.success ? `✅ ${data.notificados} clientes contactados` : 'Error'); await cargarNoAsistieron(); }
-    catch (e) { alert('Error de conexión'); }
-    finally { setRescatandoTodos(false); }
-  };
-
-  const notificarSinAgendar = async (id) => {
-    setLoadingSinAgendar(id);
-    try { const res = await fetchSeguro(`/api/barberia/sin-agendar/${id}/notificar`, { method: 'POST' }); const data = await res.json(); if (data.success) { await cargarSinAgendar(); alert(data.mensaje); } else alert('Error: ' + (data.error || 'Desconocido')); }
-    catch (e) { alert('Error de conexión'); }
-    finally { setLoadingSinAgendar(null); }
-  };
-
-  const enviarPromoVip = async (id) => { alert('🎁 Función de promo VIP próximamente'); };
-
-  const enviarRecordatorio = async (id) => {
-    setLoadingRecordatorio(id);
-    try { const res = await fetchSeguro(`/api/barberia/recordatorios/${id}/enviar`, { method: 'POST' }); const data = await res.json(); if (data.success) { await cargarRecordatorios(); alert(data.mensaje); } else alert('Error: ' + (data.error || 'Desconocido')); }
-    catch (e) { alert('Error de conexión'); }
-    finally { setLoadingRecordatorio(null); }
-  };
-
-  const enviarTodosRecordatorios = async () => {
-    try { const res = await fetchSeguro(`/api/barberia/recordatorios/enviar-todos`, { method: 'POST' }); const data = await res.json(); alert(data.success ? `✅ ${data.enviados} recordatorios enviados` : 'Error'); await cargarRecordatorios(); }
-    catch (e) { alert('Error de conexión'); }
-  };
-
-  const cerrarSesion = () => { if (typeof window !== 'undefined') { localStorage.removeItem('dashboard_user'); router.push('/login'); } };
-
-  const citasFiltradas = filtro === 'todas' ? citas : filtro === 'activas' ? citas.filter(c => ['Confirmada', 'En Proceso'].includes(c.estado)) : citas.filter(c => c.estado === filtro);
-  const noAsistieronPendientes = noAsistieron.filter(c => !c.notificado);
-  const sinAgendarPendientes = sinAgendar.filter(p => !p.notificado);
-  const recordatoriosPendientes = recordatorios.filter(c => !c.recordatorio_enviado);
-  const ingresosHoy = citas.filter(c => c.estado === 'Completada').reduce((sum, c) => sum + (c.precio || 0), 0);
-
-  if (!mounted) return null;
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600">
-      {showAlert && <div className="fixed top-0 left-0 right-0 bg-white text-indigo-600 py-3 text-center font-bold z-50 animate-pulse">🔔 ¡NUEVA CITA! 🔔</div>}
-
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">💈 Dashboard Barbería</h1>
-            <p className="text-white/60 text-sm">{stats.abierto ? '🟢 Abierto' : '🔴 Cerrado'}<span className="ml-2 cursor-pointer hover:text-white" onClick={cerrarSesion}>• Cerrar sesión</span></p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={soundEnabled ? () => setSoundEnabled(false) : enableSound} className={`px-3 py-1 rounded-full text-sm font-bold ${soundEnabled ? 'bg-green-500 text-white' : 'bg-white/20 text-white'}`}>{soundEnabled ? '🔊 Sonido' : '🔇 Sonido'}</button>
-            <div className="text-right text-white"><div className="text-xl font-mono font-bold">{hora}</div><div className="text-xs text-white/60">🔄 {countdown}s</div></div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="bg-blue-400 rounded-xl p-3 text-center"><div className="text-2xl font-bold text-blue-900">{citas.filter(c => c.estado === 'Confirmada').length}</div><div className="text-xs text-blue-800">✅ Confirmadas</div></div>
-          <div className="bg-green-400 rounded-xl p-3 text-center"><div className="text-2xl font-bold text-green-900">{stats.completadas || 0}</div><div className="text-xs text-green-800">🎉 Completadas</div></div>
-          <div className="bg-yellow-400 rounded-xl p-3 text-center"><div className="text-2xl font-bold text-yellow-900">${(stats.ingresos_hoy || ingresosHoy).toLocaleString('es-CL')}</div><div className="text-xs text-yellow-800">💰 Hoy</div></div>
-        </div>
-
-        <div className="mb-4"><input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)} className="w-full bg-white/20 text-white border-0 rounded-xl p-3 text-center font-bold" /></div>
-
-        {/* 🆕 TABS CON NUEVOS MÓDULOS */}
-        <div className="flex gap-1 mb-4 overflow-x-auto pb-2">
-          {[
-            { key: 'citas', icon: '💈', badge: citas.filter(c => ['Confirmada', 'En Proceso'].includes(c.estado)).length },
-            { key: 'noAsistio', icon: '😞', badge: noAsistieronPendientes.length },
-            { key: 'sinAgendar', icon: '📋', badge: sinAgendarPendientes.length },
-            { key: 'vips', icon: '⭐', badge: vips.length },
-            { key: 'recordatorios', icon: '⏰', badge: recordatoriosPendientes.length },
-            { key: 'servicios', icon: '✂️' },
-            { key: 'reportes', icon: '📊' },
-            { key: 'suscripcion', icon: '💳' },
-            { key: 'config', icon: '⚙️' },
-          ].map((tab) => (
-            <button key={tab.key} onClick={() => setVista(tab.key)}
-              className={`relative px-4 py-2 rounded-xl font-bold transition-all whitespace-nowrap ${vista === tab.key ? 'bg-white text-indigo-600' : 'bg-white/20 text-white'}`}>
-              {tab.icon}
-              {tab.badge > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">{tab.badge}</span>}
-            </button>
-          ))}
-        </div>
-
-        {vista === 'citas' && (
-          <>
-            <div className="flex gap-2 mb-4 overflow-x-auto">
-              {['🔥 Activas', 'Confirmada', 'En Proceso', 'Completada', '📊 Todas'].map((f, i) => {
-                const key = ['activas', 'Confirmada', 'En Proceso', 'Completada', 'todas'][i];
-                return <button key={key} onClick={() => setFiltro(key)} className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${filtro === key ? 'bg-white text-indigo-600' : 'bg-white/20 text-white'}`}>{f}</button>;
-              })}
-            </div>
-            {isLoading ? <div className="text-center text-white py-10">Cargando...</div> : citasFiltradas.length === 0 ? (
-              <div className="text-center py-10"><div className="text-6xl mb-4">📭</div><p className="text-white/60">No hay citas para este día</p></div>
-            ) : (
-              <div className="grid gap-4">{citasFiltradas.map(cita => <CitaCard key={cita.id} cita={cita} onCambiarEstado={cambiarEstado} onCompletarNotificar={completarNotificar} isLoading={loadingCita === cita.id} />)}</div>
+            {/* TAB: SISTEMA */}
+            {activeTab === 'sistema' && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">🔧 Sistema</h2>
+                <EstadoSistema sistema={sistema} />
+              </div>
             )}
           </>
         )}
 
-        {vista === 'noAsistio' && (
-          <>
-            {noAsistieronPendientes.length > 0 && <button onClick={rescatarTodosNoAsistieron} disabled={rescatandoTodos} className="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white font-bold py-4 rounded-2xl mb-4 hover:scale-105 transition-transform disabled:opacity-50">{rescatandoTodos ? '⏳...' : `😞 Rescatar ${noAsistieronPendientes.length} clientes`}</button>}
-            {noAsistieron.length === 0 ? <div className="text-center py-10"><div className="text-6xl mb-4">🎉</div><p className="text-white/60">¡Todos asistieron!</p></div> : (
-              <div className="grid gap-4">{noAsistieron.map(c => <NoAsistioCard key={c.id} cliente={c} onReagendar={notificarNoAsistio} isLoading={loadingNoAsistio === c.id} />)}</div>
-            )}
-          </>
-        )}
+      </main>
 
-        {vista === 'sinAgendar' && (
-          sinAgendar.length === 0 ? <div className="text-center py-10"><div className="text-6xl mb-4">📋</div><p className="text-white/60">No hay prospectos pendientes</p></div> : (
-            <div className="grid gap-4">{sinAgendar.map(p => <SinAgendarCard key={p.id} prospecto={p} onNotificar={notificarSinAgendar} isLoading={loadingSinAgendar === p.id} />)}</div>
-          )
-        )}
-
-        {vista === 'vips' && (
-          vips.length === 0 ? <div className="text-center py-10"><div className="text-6xl mb-4">⭐</div><p className="text-white/60">Aún no hay clientes VIP</p><p className="text-white/40 text-sm mt-2">Clientes con 3+ visitas aparecerán aquí</p></div> : (
-            <div className="grid gap-4">{vips.map(c => <VipCard key={c.id} cliente={c} onEnviarPromo={enviarPromoVip} />)}</div>
-          )
-        )}
-
-        {vista === 'recordatorios' && (
-          <>
-            {recordatoriosPendientes.length > 0 && <button onClick={enviarTodosRecordatorios} className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold py-4 rounded-2xl mb-4 hover:scale-105 transition-transform">⏰ Enviar {recordatoriosPendientes.length} recordatorios</button>}
-            {recordatorios.length === 0 ? <div className="text-center py-10"><div className="text-6xl mb-4">⏰</div><p className="text-white/60">No hay citas próximas</p></div> : (
-              <div className="grid gap-4">{recordatorios.map(c => <RecordatorioCard key={c.id} cita={c} onEnviarRecordatorio={enviarRecordatorio} isLoading={loadingRecordatorio === c.id} />)}</div>
-            )}
-          </>
-        )}
-
-        {/* 🆕 EDITOR DE SERVICIOS */}
-        {vista === 'servicios' && <EditorServicios onClose={() => setVista('citas')} />}
-
-        {vista === 'reportes' && <ReportesPanel plan={config.plan || 'BASICO'} />}
-
-        {/* 🆕 SUSCRIPCIÓN */}
-        {vista === 'suscripcion' && <SuscripcionPanel negocio="barberia" onClose={() => setVista('citas')} />}
-
-        {vista === 'config' && <ConfigPanel config={config} negocio="barberia" onConfigUpdate={cargarConfig} />}
-
-        <button onClick={() => { cargarStats(); cargarCitas(); cargarNoAsistieron(); cargarSinAgendar(); cargarVips(); cargarRecordatorios(); setCountdown(10); }}
-          className="fixed bottom-6 right-6 bg-white text-indigo-600 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl hover:scale-110 transition-transform">🔄</button>
-
-        {!soundEnabled && mounted && <div className="fixed bottom-6 left-6 bg-yellow-400 text-black px-4 py-2 rounded-full text-sm font-bold animate-pulse">⚠️ Activa el sonido</div>}
-      </div>
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 mt-8">
+        <div className="max-w-7xl mx-auto px-6 py-4 text-center text-gray-400 text-sm">
+          Dashboard Admin SaaS v2.1 • Última actualización: {dashboard?.timestamp?.slice(0, 19).replace('T', ' ')}
+        </div>
+      </footer>
     </div>
   );
 }
