@@ -601,13 +601,13 @@ function HorariosPanel() {
               <h3 className="text-white font-bold mb-3">🔒 Citas del día</h3>
               <div className="space-y-2">
                 {ocupados.map((cita, i) => (
-                  <div key={i} className="bg-white/10 rounded-xl p-3 flex justify-between items-center">
+                  <div key={i} className={`rounded-xl p-3 flex justify-between items-center ${cita.estado === 'Bloqueado' ? 'bg-red-500/20' : 'bg-white/10'}`}>
                     <div>
                       <span className="text-white font-bold">{cita.hora}</span>
-                      <span className="text-white/70 ml-2">{cita.nombre}</span>
-                      <span className="text-white/50 text-sm ml-2">({cita.servicio})</span>
+                      <span className="text-white/70 ml-2">{cita.estado === 'Bloqueado' ? '🔒 Bloqueado' : cita.nombre}</span>
+                      {cita.estado !== 'Bloqueado' && <span className="text-white/50 text-sm ml-2">({cita.servicio})</span>}
                     </div>
-                    {cita.nombre === 'Bloqueado manualmente' || cita.servicio === 'Horario Bloqueado' ? (
+                    {cita.estado === 'Bloqueado' ? (
                       <button 
                         onClick={() => desbloquearHorario(cita.hora)}
                         className="bg-green-500/20 hover:bg-green-500/40 text-green-300 px-3 py-1 rounded-lg text-sm"
