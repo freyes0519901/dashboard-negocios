@@ -408,8 +408,10 @@ function ConfigPanel({ config, negocio, onConfigUpdate }) {
 }
 
 // ============================================
-// 🕐 PANEL DE HORARIOS DISPONIBLES
+// 🕐 PANEL DE HORARIOS DISPONIBLES - CORREGIDO
 // ============================================
+// FIX: Maneja ocupados como array de objetos {hora, nombre, servicio, tipo}
+// FIX: Muestra botón desbloquear para tipo='bloqueado'
 function HorariosPanel() {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [disponibles, setDisponibles] = useState([]);
@@ -431,6 +433,7 @@ function HorariosPanel() {
       const data = await res.json();
       if (data.success) {
         setDisponibles(data.disponibles || []);
+        // ocupados ahora viene como array de objetos con {hora, nombre, servicio, tipo}
         setOcupados(data.ocupados || []);
       }
     } catch (e) {
@@ -595,28 +598,53 @@ function HorariosPanel() {
         </div>
       ) : (
         <>
-          {/* Horarios ocupados */}
+          {/* Horarios ocupados - CORREGIDO para manejar objetos */}
           {ocupados.length > 0 && (
             <div className="bg-white/10 rounded-2xl p-4">
-              <h3 className="text-white font-bold mb-3">🔒 Citas del día</h3>
+              <h3 className="text-white font-bold mb-3">🔒 Horarios ocupados</h3>
               <div className="space-y-2">
-                {ocupados.map((cita, i) => (
-                  <div key={i} className="bg-white/10 rounded-xl p-3 flex justify-between items-center">
-                    <div>
-                      <span className="text-white font-bold">{cita.hora}</span>
-                      <span className="text-white/70 ml-2">{cita.nombre}</span>
-                      <span className="text-white/50 text-sm ml-2">({cita.servicio})</span>
+                {ocupados.map((item, i) => {
+                  // Manejar tanto strings simples (compatibilidad) como objetos nuevos
+                  const hora = typeof item === 'string' ? item : item.hora;
+                  const nombre = typeof item === 'object' ? (item.nombre || '') : '';
+                  const servicio = typeof item === 'object' ? (item.servicio || '') : '';
+                  const tipo = typeof item === 'object' ? (item.tipo || 'cita') : 'desconocido';
+                  const esBloqueado = tipo === 'bloqueado' || nombre === 'Bloqueado manualmente' || servicio === 'Horario Bloqueado';
+                  
+                  return (
+                    <div key={i} className={`rounded-xl p-3 flex justify-between items-center ${
+                      esBloqueado 
+                        ? 'bg-orange-500/20 border border-orange-500/40' 
+                        : 'bg-blue-500/20 border border-blue-500/40'
+                    }`}>
+                      <div>
+                        <span className="text-white font-bold text-lg">{hora}</span>
+                        {nombre && (
+                          <span className="text-white/70 ml-2">
+                            {esBloqueado ? '🔒' : '👤'} {nombre}
+                          </span>
+                        )}
+                        {servicio && !esBloqueado && (
+                          <span className="text-white/50 text-sm ml-2">({servicio})</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {esBloqueado ? (
+                          <button 
+                            onClick={() => desbloquearHorario(hora)}
+                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-bold transition-all"
+                          >
+                            🔓 Desbloquear
+                          </button>
+                        ) : (
+                          <span className="bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs">
+                            📅 Cita confirmada
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {cita.nombre === 'Bloqueado manualmente' || cita.servicio === 'Horario Bloqueado' ? (
-                      <button 
-                        onClick={() => desbloquearHorario(cita.hora)}
-                        className="bg-green-500/20 hover:bg-green-500/40 text-green-300 px-3 py-1 rounded-lg text-sm"
-                      >
-                        🔓 Desbloquear
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1224,3 +1252,4 @@ export default function BarberiaDashboard() {
     </div>
   );
 }
+
