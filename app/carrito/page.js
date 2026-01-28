@@ -363,32 +363,7 @@ function EditorMenu({ onClose }) {
     cargarDatos();
   };
 
-  const FormularioProducto = () => (
-    <div className="bg-white/10 rounded-xl p-4 mb-4">
-      <h3 className="text-white font-bold mb-3">{mostrarNuevo ? '➕ Nuevo' : '✏️ Editar'} Producto</h3>
-      <div className="grid grid-cols-2 gap-3">
-        <input type="text" placeholder="Clave (ej: hamburguesa)" value={formKey} onChange={(e) => setFormKey(e.target.value)}
-          disabled={!!editandoId} className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-50" />
-        <input type="text" placeholder="Nombre" value={formNombre} onChange={(e) => setFormNombre(e.target.value)}
-          className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
-        <input type="number" placeholder="Precio" value={formPrecio} onChange={(e) => setFormPrecio(e.target.value)}
-          className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
-        <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)}
-          className="bg-white/20 text-white rounded-lg px-3 py-2 outline-none">
-          <option value="principal" className="bg-gray-800">Principal</option>
-          <option value="acompañamiento" className="bg-gray-800">Acompañamiento</option>
-          <option value="bebida" className="bg-gray-800">Bebida</option>
-          <option value="postre" className="bg-gray-800">Postre</option>
-        </select>
-        <textarea placeholder="Descripción" value={formDescripcion} onChange={(e) => setFormDescripcion(e.target.value)}
-          className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" rows={2} />
-      </div>
-      <div className="flex gap-2 mt-3">
-        <button onClick={guardarProducto} disabled={saving || !formNombre || !formPrecio} className="flex-1 bg-green-500 text-white font-bold py-2 rounded-lg disabled:opacity-50">{saving ? '⏳...' : '💾 Guardar'}</button>
-        <button onClick={cancelarEdicion} className="px-4 bg-white/20 text-white rounded-lg">✕</button>
-      </div>
-    </div>
-  );
+  // FIX v3.2: Formulario inline (no como función) para evitar pérdida de foco
 
   if (loading) return <div className="text-center text-white py-10"><div className="text-4xl mb-4 animate-spin">⏳</div><p>Cargando menú...</p></div>;
 
@@ -400,7 +375,33 @@ function EditorMenu({ onClose }) {
       </div>
 
       {!mostrarNuevo && !editandoId && <button onClick={() => { setMostrarNuevo(true); limpiarForm(); }} className="w-full bg-green-500/20 border-2 border-dashed border-green-500 text-green-400 py-3 rounded-xl mb-4">➕ Agregar Producto</button>}
-      {(mostrarNuevo || editandoId) && <FormularioProducto />}
+      
+      {(mostrarNuevo || editandoId) && (
+        <div className="bg-white/10 rounded-xl p-4 mb-4">
+          <h3 className="text-white font-bold mb-3">{mostrarNuevo ? '➕ Nuevo' : '✏️ Editar'} Producto</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <input type="text" placeholder="Clave (ej: hamburguesa)" value={formKey} onChange={(e) => setFormKey(e.target.value)}
+              disabled={!!editandoId} className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-50" />
+            <input type="text" placeholder="Nombre" value={formNombre} onChange={(e) => setFormNombre(e.target.value)}
+              className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
+            <input type="number" placeholder="Precio" value={formPrecio} onChange={(e) => setFormPrecio(e.target.value)}
+              className="bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" />
+            <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)}
+              className="bg-white/20 text-white rounded-lg px-3 py-2 outline-none">
+              <option value="principal" className="bg-gray-800">Principal</option>
+              <option value="acompañamiento" className="bg-gray-800">Acompañamiento</option>
+              <option value="bebida" className="bg-gray-800">Bebida</option>
+              <option value="postre" className="bg-gray-800">Postre</option>
+            </select>
+            <textarea placeholder="Descripción" value={formDescripcion} onChange={(e) => setFormDescripcion(e.target.value)}
+              className="col-span-2 bg-white/20 text-white rounded-lg px-3 py-2 placeholder-white/50 outline-none focus:ring-2 focus:ring-white/40" rows={2} />
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button onClick={guardarProducto} disabled={saving || !formNombre || !formPrecio} className="flex-1 bg-green-500 text-white font-bold py-2 rounded-lg disabled:opacity-50">{saving ? '⏳...' : '💾 Guardar'}</button>
+            <button onClick={cancelarEdicion} className="px-4 bg-white/20 text-white rounded-lg">✕</button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {productos.filter(p => p.id !== editandoId).map(prod => (
