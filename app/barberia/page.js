@@ -134,26 +134,42 @@ function ProspectoCard({ prospecto, onNotificar, isLoading }) {
 }
 
 // ============================================
-// 📊 COMPONENTE REPORTES (igual que carrito)
+// 📊 COMPONENTE REPORTES (igual que carrito) - CORREGIDO
 // ============================================
 function ReportesPanel({ plan }) {
   const [periodo, setPeriodo] = useState('hoy');
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => { cargarReportes(); }, [periodo]);
 
   const cargarReportes = async () => {
     setCargando(true);
+    setError(null);
     try {
       const res = await fetchSeguro(`/api/barberia/reportes?periodo=${periodo}`);
       const data = await res.json();
-      if (data.success) setDatos(data);
-    } catch (e) { console.error('Error reportes:', e); }
+      if (data.success) {
+        setDatos(data);
+      } else {
+        setError(data.error || 'Error cargando datos');
+        // Setear datos vacíos para mostrar tarjetas con 0
+        setDatos({ resumen: { ingresos: 0, citas: 0, ticket_promedio: 0, clientes: 0 }, top_servicios: [] });
+      }
+    } catch (e) { 
+      console.error('Error reportes:', e);
+      setError('Error de conexión');
+      // Setear datos vacíos para mostrar tarjetas con 0
+      setDatos({ resumen: { ingresos: 0, citas: 0, ticket_promedio: 0, clientes: 0 }, top_servicios: [] });
+    }
     finally { setCargando(false); }
   };
 
   const formatearPrecio = (precio) => `$${(precio || 0).toLocaleString('es-CL')}`;
+
+  // Valores por defecto si no hay datos
+  const resumen = datos?.resumen || { ingresos: 0, citas: 0, ticket_promedio: 0, clientes: 0 };
 
   if (cargando) return (
     <div className="text-center text-white py-10">
@@ -164,6 +180,7 @@ function ReportesPanel({ plan }) {
 
   return (
     <div className="space-y-4">
+      {/* Selector de periodo */}
       <div className="flex bg-white/10 rounded-xl p-1">
         {[{ key: 'hoy', label: '📅 Hoy' }, { key: 'semana', label: '📆 Semana' }, { key: 'mes', label: '🗓️ Mes' }].map((p) => (
           <button key={p.key} onClick={() => setPeriodo(p.key)}
@@ -173,27 +190,34 @@ function ReportesPanel({ plan }) {
         ))}
       </div>
 
-      {datos && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">💰 Ingresos</p>
-            <p className="text-2xl font-bold">{formatearPrecio(datos.resumen?.ingresos)}</p>
-          </div>
-          <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">✂️ Citas</p>
-            <p className="text-2xl font-bold">{datos.resumen?.citas || 0}</p>
-          </div>
-          <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">🎫 Ticket Promedio</p>
-            <p className="text-2xl font-bold">{formatearPrecio(datos.resumen?.ticket_promedio)}</p>
-          </div>
-          <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white">
-            <p className="text-white/80 text-xs">👥 Clientes</p>
-            <p className="text-2xl font-bold">{datos.resumen?.clientes || 0}</p>
-          </div>
+      {/* Mensaje de error si existe */}
+      {error && (
+        <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-3 text-red-300 text-sm text-center">
+          ⚠️ {error}
         </div>
       )}
 
+      {/* TARJETAS DE MÉTRICAS - SIEMPRE SE MUESTRAN */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-4 text-white">
+          <p className="text-white/80 text-xs">💰 Ingresos</p>
+          <p className="text-2xl font-bold">{formatearPrecio(resumen.ingresos)}</p>
+        </div>
+        <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-4 text-white">
+          <p className="text-white/80 text-xs">✂️ Citas</p>
+          <p className="text-2xl font-bold">{resumen.citas || 0}</p>
+        </div>
+        <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl p-4 text-white">
+          <p className="text-white/80 text-xs">🎫 Ticket Promedio</p>
+          <p className="text-2xl font-bold">{formatearPrecio(resumen.ticket_promedio)}</p>
+        </div>
+        <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white">
+          <p className="text-white/80 text-xs">👥 Clientes</p>
+          <p className="text-2xl font-bold">{resumen.clientes || 0}</p>
+        </div>
+      </div>
+
+      {/* Top servicios solo si hay datos */}
       {datos?.top_servicios && datos.top_servicios.length > 0 && (
         <div className="bg-white/10 rounded-2xl p-4">
           <h3 className="text-white font-bold mb-3">🏆 Top Servicios</h3>
@@ -207,6 +231,11 @@ function ReportesPanel({ plan }) {
           </div>
         </div>
       )}
+
+      {/* Botón actualizar */}
+      <button onClick={cargarReportes} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all">
+        🔄 Actualizar Reportes
+      </button>
     </div>
   );
 }
